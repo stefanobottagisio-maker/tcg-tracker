@@ -25,42 +25,72 @@
   h1{
     font-family:"Pirata One",Georgia,serif; font-weight:400;
     font-size:clamp(24px,4vw,34px); letter-spacing:.5px; color:var(--gold);
+    cursor:pointer;
   }
-  #gameTabs{display:flex; gap:6px; flex-wrap:wrap;}
-  #gameTabs button{
-    background:var(--panel); color:var(--parchment); border:1px solid var(--line);
-    border-radius:6px; padding:7px 13px; font:inherit; font-size:13px; cursor:pointer;
-  }
-  #gameTabs button.active{background:var(--gold); color:var(--sea); border-color:var(--gold); font-weight:600;}
+  h1:hover{text-shadow:0 0 12px rgba(224,168,46,.45);}
   .hbtn{
     margin-left:auto; background:var(--panel); color:var(--parchment); border:1px solid var(--line);
     border-radius:6px; padding:7px 13px; font:inherit; font-size:13px; cursor:pointer;
   }
-  .hbtn:hover, #gameTabs button:hover{border-color:var(--gold);}
+  .hbtn:hover{border-color:var(--gold);}
 
-  /* Rail dei set (One Piece / Lorcana) */
-  nav{
-    display:flex; gap:8px; overflow-x:auto; padding:12px 18px;
-    border-bottom:1px solid var(--line); scrollbar-width:thin;
+  /* Home: scelta della collezione */
+  #home{
+    display:grid; gap:18px; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));
+    max-width:1000px; margin:24px auto 0;
   }
-  nav button{
-    flex:0 0 auto; cursor:pointer; text-align:left;
-    background:var(--panel); color:var(--parchment);
-    border:1px solid var(--line); border-left:4px solid var(--gold);
-    border-radius:4px; padding:7px 12px 6px; min-width:118px; max-width:220px;
+  .gamecard{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    overflow:hidden; cursor:pointer; transition:transform .15s, border-color .15s;
   }
-  nav button .code{
-    font-family:"Pirata One",Georgia,serif; font-size:18px; letter-spacing:1px; display:block;
+  .gamecard:hover{transform:translateY(-4px); border-color:var(--gold);}
+  .gamecard img{
+    display:block; width:100%; aspect-ratio:4/3; object-fit:cover; object-position:center 18%;
+    background:linear-gradient(135deg, #16304e, #0E1C30);
   }
-  nav button .name{font-size:11px; color:var(--mute); display:block; margin-top:1px;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  nav button:hover{border-color:var(--gold);}
-  nav button.active{background:var(--gold); border-color:var(--gold);}
-  nav button.active .code{color:var(--sea);}
-  nav button.active .name{color:#5b4712;}
+  .gamecard .gtitle{
+    font-family:"Pirata One",Georgia,serif; font-size:24px; color:var(--gold);
+    padding:12px 14px 2px;
+  }
+  .gamecard .gsub{color:var(--mute); font-size:12px; padding:0 14px 14px;}
+  #homeIntro{max-width:1000px; margin:22px auto 0; color:var(--mute); font-size:14px;}
 
-  /* Selettore set Yu-Gi-Oh! */
-  #ygoPicker{padding:12px 18px; border-bottom:1px solid var(--line); display:none;}
+  /* Griglia delle espansioni con copertina */
+  .backBtn{
+    background:var(--panel); color:var(--parchment); border:1px solid var(--line);
+    border-radius:6px; padding:7px 13px; font:inherit; font-size:13px; cursor:pointer;
+    margin-bottom:12px;
+  }
+  .backBtn:hover{border-color:var(--gold);}
+  #setsTitle{
+    font-family:"Pirata One",Georgia,serif; font-weight:400;
+    font-size:clamp(22px,3vw,30px); margin:4px 0 12px;
+  }
+  #setsGrid{display:grid; gap:12px; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr));}
+  .settile{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    overflow:hidden; cursor:pointer; text-align:center; transition:transform .12s, border-color .12s;
+  }
+  .settile:hover{transform:translateY(-3px); border-color:var(--gold);}
+  .settile img{
+    display:block; width:100%; aspect-ratio:600/700; object-fit:cover; object-position:center 12%;
+    background:#0E1C30;
+  }
+  .settile .scode{
+    font-family:"Pirata One",Georgia,serif; font-size:18px; letter-spacing:1px;
+    color:var(--gold); padding-top:7px;
+  }
+  .settile .sname{
+    font-size:11px; color:var(--mute); padding:0 8px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .settile .sbar{
+    height:6px; margin:7px 10px 10px; background:var(--sea);
+    border:1px solid var(--line); border-radius:4px; overflow:hidden;
+  }
+  .settile .sbar i{display:block; height:100%; background:linear-gradient(90deg,var(--gold),#f0c35a);}
+  .settile .sprog{font-size:10px; color:var(--mute); padding-bottom:8px; margin-top:-6px; display:block;}
+  #ygoPicker{display:none; padding:4px 0 12px;}
   #ygoPicker input{
     width:min(420px,100%); background:var(--panel); border:1px solid var(--line);
     color:var(--parchment); border-radius:6px; padding:9px 12px; font:inherit;
@@ -206,12 +236,7 @@
 <body>
 
 <header>
-  <h1>TCG Tracker</h1>
-  <div id="gameTabs" role="group" aria-label="Gioco">
-    <button data-g="op" class="active">One Piece</button>
-    <button data-g="ygo">Yu-Gi-Oh!</button>
-    <button data-g="lor">Lorcana</button>
-  </div>
+  <h1 id="homeLink" title="Torna alla scelta del gioco">TCG Tracker</h1>
   <button class="hbtn" id="btnOverview">La mia collezione</button>
   <span id="authArea">
     <span id="userMail" hidden></span>
@@ -234,16 +259,26 @@
   </div>
 </div>
 
-<nav id="setNav" aria-label="Espansioni"></nav>
-
-<div id="ygoPicker">
-  <input id="ygoSearch" type="search" placeholder="Cerca un set Yu-Gi-Oh! (es. Metal Raiders, LOB...)"
-    aria-label="Cerca set Yu-Gi-Oh!">
-  <div id="ygoSetList"></div>
-</div>
-
 <main>
-  <section id="setView">
+  <section id="home">
+    <!-- riempita da renderHome() -->
+  </section>
+  <p id="homeIntro" hidden>Scegli la collezione da gestire. In alto a destra trovi il riepilogo
+    complessivo e l'accesso al tuo account per sincronizzare tra dispositivi.</p>
+
+  <section id="setsView" hidden>
+    <button class="backBtn" id="btnBackHome" type="button">&#8249; Giochi</button>
+    <h2 id="setsTitle"></h2>
+    <div id="ygoPicker">
+      <input id="ygoSearch" type="search" placeholder="Cerca un set Yu-Gi-Oh! (es. Metal Raiders, LOB...)"
+        aria-label="Cerca set Yu-Gi-Oh!">
+      <div id="ygoSetList"></div>
+    </div>
+    <div id="setsGrid"></div>
+  </section>
+
+  <section id="setView" hidden>
+    <button class="backBtn" id="btnBackSets" type="button">&#8249; Espansioni</button>
     <h2 id="setTitle"></h2>
     <p id="setCount"></p>
     <div id="toolbar" role="group" aria-label="Filtro possesso">
@@ -280,8 +315,9 @@
   prima visita. La collezione &egrave; salvata nella memoria del browser: usa &ldquo;Esporta backup&rdquo;
   regolarmente. Per Yu-Gi-Oh! il conteggio &egrave; per ristampa nel set visitato (stessa carta in due set = due voci).
   Scansione: fotografa da vicino e con buona luce il codice stampato sulla carta (One Piece: angolo in basso
-  a sinistra, es. OP05-119; Yu-Gi-Oh!: codice sotto l'illustrazione, es. MRD-EN060). Il motore OCR viene
-  scaricato al primo utilizzo e richiede connessione. Lorcana non &egrave; supportata dalla scansione.
+  a sinistra, es. OP05-119; Yu-Gi-Oh!: codice sotto l'illustrazione, es. MRD-EN060; Lorcana: tutta la riga
+  in basso a sinistra, es. 12/204 EN 3 &ndash; se il numero del set non viene letto, apri prima il set giusto).
+  Il motore OCR viene scaricato al primo utilizzo e richiede connessione.
 </footer>
 
 <div id="zoom" role="dialog" aria-modal="true">
@@ -344,7 +380,7 @@ const LOR_CARDS_URL = (code) => "https://api.lorcast.com/v0/sets/" + encodeURICo
 
 // ---------- Stato ----------
 const $ = (id) => document.getElementById(id);
-const nav = $("setNav"), grid = $("grid"), title = $("setTitle"),
+const grid = $("grid"), title = $("setTitle"),
       countEl = $("setCount"), statusEl = $("status");
 let game = "op";                 // op | ygo | lor
 let opCurrent = null, opLoaded = 0, opProbed = 0, opProbeTotal = 0;
@@ -352,6 +388,18 @@ let curPrefix = "";              // prefisso chiavi del set visualizzato
 let ownedInSet = 0;
 let lorSets = null;              // elenco set Lorcana (da API, con cache)
 let ygoSets = null;              // elenco set Yu-Gi-Oh! (da API, con cache)
+
+// ---------- Gestore viste: home | sets | cards | overview ----------
+function showView(v){
+  $("home").hidden = v !== "home";
+  $("homeIntro").hidden = v !== "home";
+  $("setsView").hidden = v !== "sets";
+  $("setView").hidden = v !== "cards";
+  $("overview").hidden = v !== "overview";
+  $("ygoPicker").style.display = (v === "sets" && game === "ygo") ? "block" : "none";
+  statusEl.textContent = "";
+  window.scrollTo({top:0});
+}
 
 // ---------- Collezione ----------
 const K_COLL = "optcg_collection", K_TOT = "optcg_set_totals", K_CACHE = "tcg_cache_";
@@ -476,7 +524,8 @@ async function onLogin(){
     setSyncDot("\u2713 sincronizzato");
     // rinfresca la vista corrente
     if (!$("overview").hidden) renderOverview();
-    else if (game === "op" && opCurrent !== null) showOp(opCurrent);
+    else if (!$("setsView").hidden) enterGame(game);
+    else if (!$("setView").hidden && game === "op" && opCurrent !== null) showOp(opCurrent);
   }catch(e){
     setSyncDot("");
     statusEl.textContent = "Errore di sincronizzazione: " + (e.message || e);
@@ -566,42 +615,119 @@ function makeTile(opt){
   return fig;
 }
 
-// ---------- Cambio gioco ----------
-document.querySelectorAll("#gameTabs button").forEach(b => {
-  b.addEventListener("click", () => {
-    document.querySelectorAll("#gameTabs button").forEach(x => x.classList.remove("active"));
-    b.classList.add("active");
-    game = b.dataset.g;
-    $("overview").hidden = true;
-    $("setView").hidden = false;
-    $("searchWrap").style.display = (game === "op") ? "" : "none";
-    $("btnScan").style.display = (game === "lor") ? "none" : "";
-    statusEl.textContent = "";
-    if (game === "op"){ $("ygoPicker").style.display = "none"; nav.style.display = "flex"; buildOpNav(); showOp(opCurrent !== null ? opCurrent : 0); }
-    if (game === "ygo"){ nav.style.display = "none"; $("ygoPicker").style.display = "block"; initYgo(); }
-    if (game === "lor"){ $("ygoPicker").style.display = "none"; nav.style.display = "flex"; initLor(); }
+// ============================================================
+// HOME e navigazione tra giochi
+// ============================================================
+const GAMES = [
+  {g:"op",  t:"One Piece Card Game", sub:"Booster OP01\u2013OP16, EB e PRB",
+   img: () => Promise.resolve(OP_HOSTS[0]("OP01", "OP01-001"))},
+  {g:"ygo", t:"Yu-Gi-Oh!", sub:"Tutti i set TCG, prezzi \u20AC inclusi",
+   img: () => Promise.resolve("https://images.ygoprodeck.com/images/cards_cropped/46986414.jpg")},
+  {g:"lor", t:"Disney Lorcana", sub:"Tutti i set, dal Primo Capitolo in poi",
+   img: () => lorCover("1")}
+];
+async function lorCover(code){
+  try{
+    const d = await cachedFetch("lorcov_" + code,
+      "https://api.lorcast.com/v0/cards/" + encodeURIComponent(code) + "/1",
+      (j) => (j.image_uris && j.image_uris.digital) ? (j.image_uris.digital.normal || j.image_uris.digital.small) : "");
+    return d || "";
+  }catch(e){ return ""; }
+}
+function renderHome(){
+  const home = $("home");
+  home.innerHTML = "";
+  GAMES.forEach(G => {
+    const el = document.createElement("div");
+    el.className = "gamecard";
+    el.innerHTML = '<img alt="' + G.t + '"><div class="gtitle">' + G.t +
+      '</div><div class="gsub">' + G.sub + '</div>';
+    G.img().then(u => { if (u) el.querySelector("img").src = u; });
+    el.addEventListener("click", () => enterGame(G.g));
+    home.appendChild(el);
   });
-});
+  showView("home");
+}
+$("homeLink").addEventListener("click", renderHome);
+$("btnBackHome").addEventListener("click", renderHome);
+$("btnBackSets").addEventListener("click", () => enterGame(game));
+
+function enterGame(g){
+  game = g;
+  $("searchWrap").style.display = (game === "op") ? "" : "none";
+  showView("sets");
+  if (g === "op"){ $("setsTitle").textContent = "One Piece \u00B7 Espansioni"; renderOpSets(); }
+  if (g === "ygo"){ $("setsTitle").textContent = "Yu-Gi-Oh! \u00B7 Set"; $("setsGrid").innerHTML = ""; initYgo(); }
+  if (g === "lor"){ $("setsTitle").textContent = "Disney Lorcana \u00B7 Set"; renderLorSets(); }
+}
+
+// Tessera espansione con copertina e barra di completamento
+function setTile(code, name, coverUrl, prefix, tot, onClick){
+  const own = ownedCount(prefix);
+  const pct = tot ? Math.min(100, Math.round(own / tot * 100)) : 0;
+  const el = document.createElement("div");
+  el.className = "settile";
+  el.innerHTML =
+    '<img loading="lazy" alt="">' +
+    '<div class="scode">' + code + '</div>' +
+    '<div class="sname" title="' + name + '">' + name + '</div>' +
+    '<div class="sbar"><i style="width:' + pct + '%"></i></div>' +
+    '<span class="sprog">' + own + ' / ' + (tot || "?") + '</span>';
+  const img = el.querySelector("img");
+  if (typeof coverUrl === "string"){ img.src = coverUrl; }
+  else if (coverUrl){ coverUrl().then(u => { if (u) img.src = u; }); }
+  el.addEventListener("click", onClick);
+  return el;
+}
+
+function renderOpSets(){
+  const g = $("setsGrid");
+  g.innerHTML = "";
+  OP_SETS.forEach((s, i) => {
+    const el = setTile(s.c, s.n, OP_HOSTS[0](s.c, s.c + "-001"), s.c + "-", TOTALS[s.c], () => showOp(i));
+    // fallback copertina sui mirror Bandai
+    const img = el.querySelector("img");
+    img.dataset.host = "0";
+    img.addEventListener("error", () => {
+      const h = Number(img.dataset.host) + 1;
+      if (h < OP_HOSTS.length){ img.dataset.host = String(h); img.src = OP_HOSTS[h](s.c, s.c + "-001"); }
+    });
+    g.appendChild(el);
+  });
+}
+
+async function renderLorSets(){
+  const g = $("setsGrid");
+  g.innerHTML = "";
+  if (!lorSets){
+    $("setsTitle").textContent = "Disney Lorcana \u00B7 carico i set\u2026";
+    try{
+      lorSets = await cachedFetch("lorsets", LOR_SETS_URL, (j) =>
+        (j.results || []).map(s => ({c: s.code, n: s.name}))
+      );
+    }catch(e){
+      statusEl.textContent = "Errore nel caricare i set Lorcana: controlla la connessione.";
+      return;
+    }
+    $("setsTitle").textContent = "Disney Lorcana \u00B7 Set";
+  }
+  lorSets.forEach((s, i) => {
+    g.appendChild(setTile(String(s.c), s.n, () => lorCover(String(s.c)),
+      "lor:" + s.c + ":", TOTALS["lor:" + s.c], () => showLorSet(i)));
+  });
+}
 
 // ============================================================
 // ONE PIECE
 // ============================================================
-function buildOpNav(){
-  nav.innerHTML = "";
-  OP_SETS.forEach((s, i) => {
-    const b = document.createElement("button");
-    b.innerHTML = '<span class="code">' + s.c + '</span><span class="name">' + s.n + '</span>';
-    b.addEventListener("click", () => showOp(i));
-    nav.appendChild(b);
-  });
-}
 function pad3(n){ return String(n).padStart(3, "0"); }
 
 function showOp(i, focusId){
+  game = "op";
   opCurrent = i;
   const s = OP_SETS[i];
-  $("overview").hidden = true; $("setView").hidden = false;
-  [...nav.children].forEach((b, k) => b.classList.toggle("active", k === i));
+  $("searchWrap").style.display = "";
+  showView("cards");
   title.textContent = s.c + " \u00B7 " + s.n;
   countEl.textContent = "Caricamento carte\u2026";
   grid.innerHTML = "";
@@ -683,24 +809,20 @@ async function cachedFetch(cacheKey, url, extract){
 // YU-GI-OH!
 // ============================================================
 async function initYgo(){
-  title.textContent = "Yu-Gi-Oh!";
-  countEl.textContent = "";
-  grid.innerHTML = "";
   if (!ygoSets){
-    countEl.textContent = "Scarico l'elenco dei set\u2026";
+    $("setsTitle").textContent = "Yu-Gi-Oh! \u00B7 carico i set\u2026";
     try{
       ygoSets = await cachedFetch("ygosets", YGO_SETS_URL, (j) =>
         j.filter(s => s.set_code).map(s => ({n: s.set_name, c: s.set_code, num: s.num_of_cards, d: s.tcg_date || ""}))
           .sort((a, b) => (b.d || "").localeCompare(a.d || ""))
       );
     }catch(e){
-      countEl.textContent = "";
       statusEl.textContent = "Errore nel caricare i set Yu-Gi-Oh!: controlla la connessione.";
       return;
     }
   }
-  countEl.textContent = ygoSets.length + " set disponibili \u00B7 cerca qui sopra e scegline uno";
-  renderYgoSetList("");
+  $("setsTitle").textContent = "Yu-Gi-Oh! \u00B7 " + ygoSets.length + " set (cerca per nome o codice)";
+  renderYgoSetList($("ygoSearch").value || "");
 }
 function renderYgoSetList(q){
   const list = $("ygoSetList");
@@ -723,10 +845,12 @@ function renderYgoSetList(q){
 $("ygoSearch").addEventListener("input", (e) => renderYgoSetList(e.target.value));
 
 async function showYgoSet(s){
+  game = "ygo";
+  $("searchWrap").style.display = "none";
+  showView("cards");
   title.textContent = s.n + " \u00B7 " + s.c;
   countEl.textContent = "Caricamento carte\u2026";
   grid.innerHTML = "";
-  statusEl.textContent = "";
   curPrefix = "ygo:" + s.c + ":";
   ownedInSet = ownedCount(curPrefix);
   let cards;
@@ -766,39 +890,14 @@ async function showYgoSet(s){
 // ============================================================
 // LORCANA
 // ============================================================
-async function initLor(){
-  title.textContent = "Disney Lorcana";
-  countEl.textContent = "";
-  grid.innerHTML = "";
-  nav.innerHTML = "";
-  if (!lorSets){
-    countEl.textContent = "Scarico l'elenco dei set\u2026";
-    try{
-      lorSets = await cachedFetch("lorsets", LOR_SETS_URL, (j) =>
-        (j.results || []).map(s => ({c: s.code, n: s.name}))
-      );
-    }catch(e){
-      countEl.textContent = "";
-      statusEl.textContent = "Errore nel caricare i set Lorcana: controlla la connessione.";
-      return;
-    }
-  }
-  lorSets.forEach((s, i) => {
-    const b = document.createElement("button");
-    b.innerHTML = '<span class="code">' + s.c + '</span><span class="name">' + s.n + '</span>';
-    b.title = s.n;
-    b.addEventListener("click", () => showLorSet(i));
-    nav.appendChild(b);
-  });
-  showLorSet(0);
-}
 async function showLorSet(i){
   const s = lorSets[i];
-  [...nav.children].forEach((b, k) => b.classList.toggle("active", k === i));
+  game = "lor";
+  $("searchWrap").style.display = "none";
+  showView("cards");
   title.textContent = s.n + " (" + s.c + ")";
   countEl.textContent = "Caricamento carte\u2026";
   grid.innerHTML = "";
-  statusEl.textContent = "";
   curPrefix = "lor:" + s.c + ":";
   ownedInSet = ownedCount(curPrefix);
   let cards;
@@ -915,14 +1014,39 @@ async function handleScannedText(text){
     if (idx < 0){ statusEl.textContent = "Codice letto (" + id + ") ma il set non \u00E8 in elenco."; return; }
     const q = bumpKey(id);
     statusEl.textContent = "\u2713 " + id + " aggiunta alla collezione (ora x" + q + ")";
-    switchTab("op");
     showOp(idx, id);
+    return;
+  }
+
+  // --- Lorcana: riga in basso tipo "12/204 EN 3" (numero/totale ... set) ---
+  const mLor = clean.match(/\b(\d{1,3})\s*\/\s*(\d{2,3})\b/);
+  if (mLor){
+    const num = String(Number(mLor[1]));
+    let setCode = null;
+    const after = clean.slice(mLor.index + mLor[0].length);
+    const mSet = after.match(/^[^0-9]{0,16}(\d{1,2})\b/);
+    if (mSet) setCode = String(Number(mSet[1]));
+    else if (curPrefix.startsWith("lor:")) setCode = curPrefix.split(":")[1]; // set aperto al momento
+    if (!setCode){
+      statusEl.textContent = "Letto il numero " + num + "/" + mLor[2] +
+        " ma non il set: apri prima il set Lorcana giusto e riprova, oppure includi tutta la riga in basso nella foto.";
+      return;
+    }
+    if (!lorSets){
+      try{ lorSets = await cachedFetch("lorsets", LOR_SETS_URL, (j) => (j.results || []).map(s => ({c: s.code, n: s.name}))); }
+      catch(e){ /* si prosegue comunque */ }
+    }
+    const known = lorSets && lorSets.find(s => String(s.c) === setCode);
+    const key = "lor:" + setCode + ":" + num;
+    const q = bumpKey(key);
+    statusEl.textContent = "\u2713 Lorcana " + num + " del set " + (known ? known.n : setCode) +
+      " aggiunta (ora x" + q + ")";
     return;
   }
 
   // --- Yu-Gi-Oh!: codice stampato tipo MRD-EN060 / LOB-124 ---
   const mYgo = clean.match(/\b([A-Z]{2,5})-([A-Z]{0,2})(\d{3})\b/);
-  if (mYgo && game !== "op"){
+  if (mYgo){
     const printed = mYgo[1] + "-" + mYgo[2] + mYgo[3];
     statusEl.textContent = "Codice letto: " + printed + " \u00B7 cerco la carta\u2026";
     try{
@@ -941,8 +1065,9 @@ async function handleScannedText(text){
     return;
   }
 
-  statusEl.textContent = "Nessun codice riconosciuto. Fotografa da vicino l'angolo con il codice " +
-    "(in basso a sinistra per One Piece, sotto l'illustrazione per Yu-Gi-Oh!) con buona luce.";
+  statusEl.textContent = "Nessun codice riconosciuto. Fotografa da vicino e con buona luce: " +
+    "One Piece \u2192 codice in basso a sinistra (OP05-119); Yu-Gi-Oh! \u2192 codice sotto l'illustrazione " +
+    "(MRD-EN060); Lorcana \u2192 tutta la riga in basso a sinistra (12/204 EN 3).";
 }
 
 // ============================================================
@@ -977,11 +1102,7 @@ function ovRow(rows, label, prefix, tot, onClick){
   return own;
 }
 function renderOverview(){
-  $("setView").hidden = true;
-  $("overview").hidden = false;
-  $("ygoPicker").style.display = "none";
-  nav.style.display = "none";
-  statusEl.textContent = "";
+  showView("overview");
   const rows = $("ovRows");
   rows.innerHTML = "";
   let grandOwned = 0, grandCopies = 0;
@@ -990,9 +1111,7 @@ function renderOverview(){
   // --- One Piece ---
   const h1 = document.createElement("div"); h1.className = "ovgame"; h1.textContent = "One Piece"; rows.appendChild(h1);
   OP_SETS.forEach((s, i) => {
-    grandOwned += ovRow(rows, s.c, s.c + "-", TOTALS[s.c], () => {
-      switchTab("op"); buildOpNav(); showOp(i);
-    });
+    grandOwned += ovRow(rows, s.c, s.c + "-", TOTALS[s.c], () => showOp(i));
   });
 
   // --- Yu-Gi-Oh! (solo set con carte possedute) ---
@@ -1001,12 +1120,12 @@ function renderOverview(){
   for (const id in COLL) if (id.startsWith("ygo:")) ygoCodes.add(id.split(":")[1]);
   if (ygoCodes.size === 0){
     const p = document.createElement("p"); p.className = "ovempty";
-    p.textContent = "Nessuna carta ancora: apri la scheda Yu-Gi-Oh! e scegli un set.";
+    p.textContent = "Nessuna carta ancora: apri Yu-Gi-Oh! dalla home e scegli un set.";
     rows.appendChild(p);
   } else {
     [...ygoCodes].sort().forEach(code => {
       const label = TOTALS["ygoname:" + code] || code;
-      grandOwned += ovRow(rows, label, "ygo:" + code + ":", TOTALS["ygo:" + code], () => switchTab("ygo"));
+      grandOwned += ovRow(rows, label, "ygo:" + code + ":", TOTALS["ygo:" + code], () => enterGame("ygo"));
     });
   }
 
@@ -1017,21 +1136,23 @@ function renderOverview(){
   for (const k in TOTALS) if (k.startsWith("lor:")) lorCodes.add(k.slice(4));
   if (lorCodes.size === 0){
     const p = document.createElement("p"); p.className = "ovempty";
-    p.textContent = "Nessuna carta ancora: apri la scheda Lorcana per iniziare.";
+    p.textContent = "Nessuna carta ancora: apri Lorcana dalla home per iniziare.";
     rows.appendChild(p);
   } else {
     [...lorCodes].sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric:true})).forEach(code => {
       const label = TOTALS["lorname:" + code] || ("Set " + code);
-      grandOwned += ovRow(rows, label, "lor:" + code + ":", TOTALS["lor:" + code], () => switchTab("lor"));
+      grandOwned += ovRow(rows, label, "lor:" + code + ":", TOTALS["lor:" + code], () => openLorByCode(code));
     });
   }
 
   $("ovTotal").textContent = "Totale complessivo: " + grandOwned + " carte uniche" +
     (grandCopies > grandOwned ? " (" + grandCopies + " copie)" : "");
 }
-function switchTab(g){
-  document.querySelectorAll("#gameTabs button").forEach(x => x.classList.toggle("active", x.dataset.g === g));
-  document.querySelector('#gameTabs button[data-g="' + g + '"]').click();
+async function openLorByCode(code){
+  game = "lor";
+  if (!lorSets){ await renderLorSets(); }
+  const i = lorSets ? lorSets.findIndex(s => String(s.c) === String(code)) : -1;
+  if (i >= 0) showLorSet(i); else enterGame("lor");
 }
 
 // ============================================================
@@ -1084,8 +1205,7 @@ zoom.addEventListener("click", () => zoom.classList.remove("open"));
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") zoom.classList.remove("open"); });
 
 // ---------- Avvio ----------
-buildOpNav();
-showOp(0);
+renderHome();
 </script>
 </body>
 </html>
