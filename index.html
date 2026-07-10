@@ -96,13 +96,7 @@
     color:var(--parchment); border-radius:6px; padding:9px 12px; font:inherit;
   }
   #ygoPicker input:focus{outline:2px solid var(--gold); outline-offset:1px;}
-  #ygoSetList{margin-top:8px; max-height:240px; overflow-y:auto;}
-  .ygoSetRow{
-    display:flex; justify-content:space-between; gap:10px; padding:8px 10px;
-    border-bottom:1px solid var(--line); cursor:pointer; font-size:13px;
-  }
-  .ygoSetRow:hover{background:var(--panel); color:var(--gold);}
-  .ygoSetRow .meta{color:var(--mute); font-size:12px; white-space:nowrap;}
+  .settile.ygo img{aspect-ratio:1/1; object-fit:contain; padding:8px; background:#0E1C30;}
 
   main{padding:16px 18px 60px; max-width:1400px; margin:0 auto;}
   #setTitle{
@@ -272,7 +266,6 @@
     <div id="ygoPicker">
       <input id="ygoSearch" type="search" placeholder="Cerca un set Yu-Gi-Oh! (es. Metal Raiders, LOB...)"
         aria-label="Cerca set Yu-Gi-Oh!">
-      <div id="ygoSetList"></div>
     </div>
     <div id="setsGrid"></div>
   </section>
@@ -618,13 +611,31 @@ function makeTile(opt){
 // ============================================================
 // HOME e navigazione tra giochi
 // ============================================================
+// Risolve la prima immagine disponibile tra piu' fonti (stringhe o funzioni async)
+function chainImg(img, sources){
+  let i = 0;
+  const tryNext = () => {
+    if (i >= sources.length) return;
+    const s = sources[i++];
+    if (typeof s === "function"){
+      Promise.resolve(s()).then(u => { if (u) img.src = u; else tryNext(); }).catch(tryNext);
+    } else {
+      img.src = s;
+    }
+  };
+  img.addEventListener("error", tryNext);
+  tryNext();
+}
+
+// Copertine: prima l'eventuale immagine locale nel repo (cartella img/),
+// poi la migliore fonte online, altrimenti resta il segnaposto.
 const GAMES = [
   {g:"op",  t:"One Piece Card Game", sub:"Booster OP01\u2013OP16, EB e PRB",
-   img: () => Promise.resolve(OP_HOSTS[0]("OP01", "OP01-001"))},
+   srcs: ["img/home-op.jpg", OP_HOSTS[0]("OP01", "OP01-001")]},
   {g:"ygo", t:"Yu-Gi-Oh!", sub:"Tutti i set TCG, prezzi \u20AC inclusi",
-   img: () => Promise.resolve("https://images.ygoprodeck.com/images/cards_cropped/46986414.jpg")},
+   srcs: ["img/home-ygo.jpg", "https://images.ygoprodeck.com/images/cards_cropped/46986414.jpg"]},
   {g:"lor", t:"Disney Lorcana", sub:"Tutti i set, dal Primo Capitolo in poi",
-   img: () => lorCover("1")}
+   srcs: ["img/home-lor.jpg", () => lorCover("1")]}
 ];
 async function lorCover(code){
   try{
@@ -642,7 +653,7 @@ function renderHome(){
     el.className = "gamecard";
     el.innerHTML = '<img alt="' + G.t + '"><div class="gtitle">' + G.t +
       '</div><div class="gsub">' + G.sub + '</div>';
-    G.img().then(u => { if (u) el.querySelector("img").src = u; });
+    chainImg(el.querySelector("img"), G.srcs);
     el.addEventListener("click", () => enterGame(G.g));
     home.appendChild(el);
   });
@@ -661,8 +672,8 @@ function enterGame(g){
   if (g === "lor"){ $("setsTitle").textContent = "Disney Lorcana \u00B7 Set"; renderLorSets(); }
 }
 
-// Tessera espansione con copertina e barra di completamento
-function setTile(code, name, coverUrl, prefix, tot, onClick){
+// Tessera espansione con copertina (catena di fonti) e barra di completamento
+function setTile(code, name, sources, prefix, tot, onClick){
   const own = ownedCount(prefix);
   const pct = tot ? Math.min(100, Math.round(own / tot * 100)) : 0;
   const el = document.createElement("div");
@@ -673,9 +684,7 @@ function setTile(code, name, coverUrl, prefix, tot, onClick){
     '<div class="sname" title="' + name + '">' + name + '</div>' +
     '<div class="sbar"><i style="width:' + pct + '%"></i></div>' +
     '<span class="sprog">' + own + ' / ' + (tot || "?") + '</span>';
-  const img = el.querySelector("img");
-  if (typeof coverUrl === "string"){ img.src = coverUrl; }
-  else if (coverUrl){ coverUrl().then(u => { if (u) img.src = u; }); }
+  chainImg(el.querySelector("img"), sources);
   el.addEventListener("click", onClick);
   return el;
 }
@@ -684,15 +693,12 @@ function renderOpSets(){
   const g = $("setsGrid");
   g.innerHTML = "";
   OP_SETS.forEach((s, i) => {
-    const el = setTile(s.c, s.n, OP_HOSTS[0](s.c, s.c + "-001"), s.c + "-", TOTALS[s.c], () => showOp(i));
-    // fallback copertina sui mirror Bandai
-    const img = el.querySelector("img");
-    img.dataset.host = "0";
-    img.addEventListener("error", () => {
-      const h = Number(img.dataset.host) + 1;
-      if (h < OP_HOSTS.length){ img.dataset.host = String(h); img.src = OP_HOSTS[h](s.c, s.c + "-001"); }
-    });
-    g.appendChild(el);
+    g.appendChild(setTile(s.c, s.n, [
+      "img/sets/" + s.c + ".jpg",
+      OP_HOSTS[0](s.c, s.c + "-001"),
+      OP_HOSTS[1](s.c, s.c + "-001"),
+      OP_HOSTS[2](s.c, s.c + "-001")
+    ], s.c + "-", TOTALS[s.c], () => showOp(i)));
   });
 }
 
@@ -712,8 +718,10 @@ async function renderLorSets(){
     $("setsTitle").textContent = "Disney Lorcana \u00B7 Set";
   }
   lorSets.forEach((s, i) => {
-    g.appendChild(setTile(String(s.c), s.n, () => lorCover(String(s.c)),
-      "lor:" + s.c + ":", TOTALS["lor:" + s.c], () => showLorSet(i)));
+    g.appendChild(setTile(String(s.c), s.n, [
+      "img/sets/LOR-" + s.c + ".jpg",
+      () => lorCover(String(s.c))
+    ], "lor:" + s.c + ":", TOTALS["lor:" + s.c], () => showLorSet(i)));
   });
 }
 
@@ -825,22 +833,22 @@ async function initYgo(){
   renderYgoSetList($("ygoSearch").value || "");
 }
 function renderYgoSetList(q){
-  const list = $("ygoSetList");
-  list.innerHTML = "";
+  const g = $("setsGrid");
+  g.innerHTML = "";
   if (!ygoSets) return;
   const needle = q.trim().toLowerCase();
   const matches = (needle
     ? ygoSets.filter(s => s.n.toLowerCase().includes(needle) || s.c.toLowerCase().includes(needle))
     : ygoSets).slice(0, 30);
   matches.forEach(s => {
-    const row = document.createElement("div");
-    row.className = "ygoSetRow";
-    row.innerHTML = '<span>' + s.n + '</span><span class="meta">' + s.c +
-      ' \u00B7 ' + s.num + ' carte' + (s.d ? ' \u00B7 ' + s.d : '') + '</span>';
-    row.addEventListener("click", () => showYgoSet(s));
-    list.appendChild(row);
+    const el = setTile(s.c, s.n + " \u00B7 " + s.num + " carte" + (s.d ? " \u00B7 " + s.d : ""), [
+      "img/sets/YGO-" + s.c + ".jpg",
+      "https://images.ygoprodeck.com/images/sets/" + encodeURIComponent(s.c) + ".jpg"
+    ], "ygo:" + s.c + ":", TOTALS["ygo:" + s.c] || s.num, () => showYgoSet(s));
+    el.classList.add("ygo");
+    g.appendChild(el);
   });
-  if (!matches.length) list.innerHTML = '<div class="ygoSetRow">Nessun set trovato.</div>';
+  if (!matches.length) g.innerHTML = '<p class="ovempty">Nessun set trovato: prova con il nome inglese o il codice.</p>';
 }
 $("ygoSearch").addEventListener("input", (e) => renderYgoSetList(e.target.value));
 
