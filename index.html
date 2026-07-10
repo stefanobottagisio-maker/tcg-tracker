@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TCG Tracker · One Piece / Yu-Gi-Oh! / Lorcana</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --sea:#0A1626; --panel:#12233A; --line:#23405E;
+    --parchment:#EFE3C8; --gold:#E0A82E; --wax:#C8372D; --mute:#8CA3BE;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--sea); color:var(--parchment); font-family:"IBM Plex Sans",system-ui,sans-serif;}
+
+  header{
+    position:sticky; top:0; z-index:20;
+    background:linear-gradient(180deg, #0A1626 75%, rgba(10,22,38,.92));
+    border-bottom:1px solid var(--line);
+    padding:14px 18px 10px;
+    display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center;
+  }
+  h1{
+    font-family:"Pirata One",Georgia,serif; font-weight:400;
+    font-size:clamp(24px,4vw,34px); letter-spacing:.5px; color:var(--gold);
+  }
+  #gameTabs{display:flex; gap:6px; flex-wrap:wrap;}
+  #gameTabs button{
+    background:var(--panel); color:var(--parchment); border:1px solid var(--line);
+    border-radius:6px; padding:7px 13px; font:inherit; font-size:13px; cursor:pointer;
+  }
+  #gameTabs button.active{background:var(--gold); color:var(--sea); border-color:var(--gold); font-weight:600;}
+  .hbtn{
+    margin-left:auto; background:var(--panel); color:var(--parchment); border:1px solid var(--line);
+    border-radius:6px; padding:7px 13px; font:inherit; font-size:13px; cursor:pointer;
+  }
+  .hbtn:hover, #gameTabs button:hover{border-color:var(--gold);}
+
+  /* Rail dei set (One Piece / Lorcana) */
+  nav{
+    display:flex; gap:8px; overflow-x:auto; padding:12px 18px;
+    border-bottom:1px solid var(--line); scrollbar-width:thin;
+  }
+  nav button{
+    flex:0 0 auto; cursor:pointer; text-align:left;
+    background:var(--panel); color:var(--parchment);
+    border:1px solid var(--line); border-left:4px solid var(--gold);
+    border-radius:4px; padding:7px 12px 6px; min-width:118px; max-width:220px;
+  }
+  nav button .code{
+    font-family:"Pirata One",Georgia,serif; font-size:18px; letter-spacing:1px; display:block;
+  }
+  nav button .name{font-size:11px; color:var(--mute); display:block; margin-top:1px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  nav button:hover{border-color:var(--gold);}
+  nav button.active{background:var(--gold); border-color:var(--gold);}
+  nav button.active .code{color:var(--sea);}
+  nav button.active .name{color:#5b4712;}
+
+  /* Selettore set Yu-Gi-Oh! */
+  #ygoPicker{padding:12px 18px; border-bottom:1px solid var(--line); display:none;}
+  #ygoPicker input{
+    width:min(420px,100%); background:var(--panel); border:1px solid var(--line);
+    color:var(--parchment); border-radius:6px; padding:9px 12px; font:inherit;
+  }
+  #ygoPicker input:focus{outline:2px solid var(--gold); outline-offset:1px;}
+  #ygoSetList{margin-top:8px; max-height:240px; overflow-y:auto;}
+  .ygoSetRow{
+    display:flex; justify-content:space-between; gap:10px; padding:8px 10px;
+    border-bottom:1px solid var(--line); cursor:pointer; font-size:13px;
+  }
+  .ygoSetRow:hover{background:var(--panel); color:var(--gold);}
+  .ygoSetRow .meta{color:var(--mute); font-size:12px; white-space:nowrap;}
+
+  main{padding:16px 18px 60px; max-width:1400px; margin:0 auto;}
+  #setTitle{
+    font-family:"Pirata One",Georgia,serif; font-weight:400;
+    font-size:clamp(20px,3vw,28px); margin:6px 0 2px;
+  }
+  #setCount{color:var(--mute); font-size:13px; margin-bottom:14px;}
+
+  #grid{display:grid; gap:12px; grid-template-columns:repeat(auto-fill, minmax(138px, 1fr));}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:8px;
+    overflow:hidden; cursor:zoom-in; transition:transform .12s;}
+  .card:hover{transform:translateY(-3px); border-color:var(--gold);}
+  .card img{display:block; width:100%; aspect-ratio:600/838; object-fit:cover; background:#0E1C30;}
+  .card.ygo img{aspect-ratio:421/614;}
+  .card figcaption{
+    font-size:11px; letter-spacing:.3px; color:var(--mute);
+    text-align:center; padding:5px 4px 0;
+  }
+  .card.hit{outline:3px solid var(--wax); outline-offset:2px;}
+
+  /* Possesso e quantita' */
+  .card .owncap{display:flex; flex-direction:column; align-items:center; gap:3px; padding-bottom:6px;}
+  .card .clabel{max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 4px;}
+  .stepper{display:flex; align-items:center; gap:2px;}
+  .stepper button{
+    width:26px; height:24px; border:1px solid var(--line); background:var(--sea);
+    color:var(--parchment); border-radius:5px; font-size:15px; line-height:1; cursor:pointer;
+  }
+  .stepper button:hover{border-color:var(--gold);}
+  .stepper .qty{min-width:26px; text-align:center; font-size:13px; font-weight:600; color:var(--mute);}
+  .card.owned .stepper .qty{color:var(--gold);}
+  .card.owned{border-color:var(--gold); box-shadow:0 0 0 1px var(--gold) inset;}
+  .card.owned figcaption{color:var(--gold);}
+  .card:not(.owned) img{filter:grayscale(.55) brightness(.75);}
+  body.filter-owned .card:not(.owned){display:none;}
+  body.filter-missing .card.owned{display:none;}
+  body.filter-dupes .card:not(.dupe){display:none;}
+
+  #toolbar{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 14px;}
+  #toolbar button, #overview button, #ovActions button{
+    background:var(--panel); color:var(--parchment); border:1px solid var(--line);
+    border-radius:6px; padding:7px 13px; font:inherit; font-size:13px; cursor:pointer;
+  }
+  #toolbar button.active{background:var(--gold); color:var(--sea); border-color:var(--gold); font-weight:600;}
+  #toolbar button:hover, #overview button:hover{border-color:var(--gold);}
+  #searchWrap{margin-left:auto;}
+  #search{
+    background:var(--panel); border:1px solid var(--line);
+    color:var(--parchment); border-radius:6px; padding:7px 12px; font:inherit; width:min(220px,100%);
+  }
+
+  /* Pannello collezione */
+  #overview h2, .ovgame{
+    font-family:"Pirata One",Georgia,serif; font-weight:400;
+    font-size:clamp(20px,3vw,28px); margin:6px 0 4px;
+  }
+  .ovgame{margin-top:22px; color:var(--gold); border-bottom:1px solid var(--line); padding-bottom:4px;}
+  #ovTotal{color:var(--mute); font-size:13px; margin-bottom:8px;}
+  .ovrow{
+    display:grid; grid-template-columns:minmax(64px,150px) 1fr 100px; gap:10px; align-items:center;
+    padding:9px 0; border-bottom:1px solid var(--line); cursor:pointer;
+  }
+  .ovrow:hover .ovcode{color:var(--gold);}
+  .ovcode{font-family:"Pirata One",Georgia,serif; font-size:17px; letter-spacing:1px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .ovbar{height:10px; background:var(--panel); border:1px solid var(--line); border-radius:6px; overflow:hidden;}
+  .ovbar i{display:block; height:100%; background:linear-gradient(90deg,var(--gold),#f0c35a);}
+  .ovnum{font-size:12px; color:var(--mute); text-align:right;}
+  .ovempty{color:var(--mute); font-size:13px; padding:8px 0;}
+  #ovActions{display:flex; gap:8px; flex-wrap:wrap; margin-top:18px;}
+
+  /* Zoom overlay */
+  #zoom{
+    position:fixed; inset:0; z-index:50; display:none;
+    background:rgba(6,12,22,.88); align-items:center; justify-content:center; padding:24px;
+    cursor:zoom-out;
+  }
+  #zoom.open{display:flex;}
+  #zoom img{max-height:86vh; max-width:94vw; border-radius:10px; box-shadow:0 12px 50px rgba(0,0,0,.6);}
+  #zoom figcaption{
+    position:fixed; bottom:14px; left:0; right:0; text-align:center;
+    font-size:14px; color:var(--parchment); letter-spacing:.5px;
+  }
+  #zoomLinks{display:flex; gap:10px; justify-content:center; margin-top:10px; flex-wrap:wrap;}
+  #zoomLinks a{
+    background:var(--gold); color:var(--sea); text-decoration:none; font-weight:600;
+    font-size:13px; padding:8px 14px; border-radius:6px;
+  }
+  #zoomLinks a.alt{background:var(--panel); color:var(--parchment); border:1px solid var(--line);}
+  #zoomLinks a:hover{filter:brightness(1.1);}
+  #zoomPrice{display:block; margin-top:8px; color:var(--gold); font-size:13px;}
+
+  #status{color:var(--mute); font-size:13px; padding:8px 0;}
+
+  /* Area utente e login */
+  #authArea{display:flex; align-items:center; gap:8px;}
+  #userMail{font-size:12px; color:var(--mute); max-width:180px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  #authModal{
+    position:fixed; inset:0; z-index:60; display:none;
+    background:rgba(6,12,22,.88); align-items:center; justify-content:center; padding:24px;
+  }
+  #authModal.open{display:flex;}
+  #authBox{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:24px; width:min(360px,100%); display:flex; flex-direction:column; gap:10px;
+  }
+  #authBox h2{font-family:"Pirata One",Georgia,serif; font-weight:400; color:var(--gold); font-size:24px;}
+  #authBox input{
+    background:var(--sea); border:1px solid var(--line); color:var(--parchment);
+    border-radius:6px; padding:10px 12px; font:inherit;
+  }
+  #authBox input:focus{outline:2px solid var(--gold); outline-offset:1px;}
+  #authBox .row{display:flex; gap:8px;}
+  #authBox button{
+    flex:1; background:var(--gold); color:var(--sea); border:none; border-radius:6px;
+    padding:10px; font:inherit; font-weight:600; cursor:pointer;
+  }
+  #authBox button.alt{background:var(--sea); color:var(--parchment); border:1px solid var(--line);}
+  #authMsg{font-size:12px; color:var(--mute); min-height:16px;}
+  #syncDot{font-size:11px; color:var(--mute);}
+
+  footer{
+    border-top:1px solid var(--line); color:var(--mute);
+    font-size:12px; padding:14px 18px 26px; line-height:1.6; max-width:1400px; margin:0 auto;
+  }
+  @media (prefers-reduced-motion: reduce){ .card{transition:none;} }
+  @media (max-width:520px){ #grid{grid-template-columns:repeat(auto-fill,minmax(108px,1fr));} }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>TCG Tracker</h1>
+  <div id="gameTabs" role="group" aria-label="Gioco">
+    <button data-g="op" class="active">One Piece</button>
+    <button data-g="ygo">Yu-Gi-Oh!</button>
+    <button data-g="lor">Lorcana</button>
+  </div>
+  <button class="hbtn" id="btnOverview">La mia collezione</button>
+  <span id="authArea">
+    <span id="userMail" hidden></span>
+    <span id="syncDot" hidden></span>
+    <button class="hbtn" id="btnAuth" style="margin-left:0">Accedi</button>
+  </span>
+</header>
+
+<div id="authModal" role="dialog" aria-modal="true" aria-label="Accesso">
+  <div id="authBox">
+    <h2>Accedi</h2>
+    <input id="authEmail" type="email" placeholder="Email" autocomplete="email">
+    <input id="authPass" type="password" placeholder="Password (min 6 caratteri)" autocomplete="current-password">
+    <div class="row">
+      <button id="btnLogin" type="button">Accedi</button>
+      <button id="btnSignup" type="button" class="alt">Registrati</button>
+    </div>
+    <button id="btnAuthClose" type="button" class="alt">Annulla</button>
+    <p id="authMsg"></p>
+  </div>
+</div>
+
+<nav id="setNav" aria-label="Espansioni"></nav>
+
+<div id="ygoPicker">
+  <input id="ygoSearch" type="search" placeholder="Cerca un set Yu-Gi-Oh! (es. Metal Raiders, LOB...)"
+    aria-label="Cerca set Yu-Gi-Oh!">
+  <div id="ygoSetList"></div>
+</div>
+
+<main>
+  <section id="setView">
+    <h2 id="setTitle"></h2>
+    <p id="setCount"></p>
+    <div id="toolbar" role="group" aria-label="Filtro possesso">
+      <button data-f="all" class="active">Tutte</button>
+      <button data-f="owned">Possedute</button>
+      <button data-f="missing">Mancanti</button>
+      <button data-f="dupes">Doppie (x2+)</button>
+      <button id="btnScan" type="button">&#128247; Scansiona carta</button>
+      <input type="file" id="scanFile" accept="image/*" capture="environment" hidden>
+      <span id="searchWrap"><input id="search" type="search"
+        placeholder="Vai alla carta (es. OP05-119)" aria-label="Cerca carta One Piece per codice"></span>
+    </div>
+    <div id="grid"></div>
+  </section>
+
+  <section id="overview" hidden>
+    <h2>La mia collezione</h2>
+    <p id="ovTotal"></p>
+    <div id="ovRows"></div>
+    <div id="ovActions">
+      <button id="btnExport">Esporta backup (JSON)</button>
+      <button id="btnImport">Importa backup</button>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+    </div>
+  </section>
+
+  <p id="status"></p>
+</main>
+
+<footer>
+  Fonti dati e immagini: One Piece via CDN Limitless TCG (fallback siti Bandai); Yu-Gi-Oh! via API YGOPRODeck
+  (che include il prezzo Cardmarket in euro); Lorcana via API Lorcast. Serve connessione internet per caricare
+  immagini e set non ancora visitati; gli elenchi carte di Yu-Gi-Oh! e Lorcana vengono salvati in locale dopo la
+  prima visita. La collezione &egrave; salvata nella memoria del browser: usa &ldquo;Esporta backup&rdquo;
+  regolarmente. Per Yu-Gi-Oh! il conteggio &egrave; per ristampa nel set visitato (stessa carta in due set = due voci).
+  Scansione: fotografa da vicino e con buona luce il codice stampato sulla carta (One Piece: angolo in basso
+  a sinistra, es. OP05-119; Yu-Gi-Oh!: codice sotto l'illustrazione, es. MRD-EN060). Il motore OCR viene
+  scaricato al primo utilizzo e richiede connessione. Lorcana non &egrave; supportata dalla scansione.
+</footer>
+
+<div id="zoom" role="dialog" aria-modal="true">
+  <figure>
+    <img id="zoomImg" src="" alt="">
+    <figcaption>
+      <span id="zoomCap"></span>
+      <span id="zoomPrice"></span>
+      <span id="zoomLinks"></span>
+    </figcaption>
+  </figure>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   TCG Tracker - One Piece (probe) / Yu-Gi-Oh! (API) / Lorcana (API)
+   Chiavi collezione:
+     One Piece : "OP01-001"            (formato storico, retrocompatibile)
+     Yu-Gi-Oh! : "ygo:MRD:46986414"    (set code : passcode)
+     Lorcana   : "lor:1:12"            (set code : collector number)
+   ============================================================ */
+
+// ---------- One Piece: espansioni e fonti immagini ----------
+const OP_SETS = [
+  {c:"OP01",  n:"Romance Dawn",              max:130},
+  {c:"OP02",  n:"Paramount War",             max:130},
+  {c:"OP03",  n:"Pillars of Strength",       max:130},
+  {c:"OP04",  n:"Kingdoms of Intrigue",      max:130},
+  {c:"OP05",  n:"Awakening of the New Era",  max:130},
+  {c:"OP06",  n:"Wings of the Captain",      max:130},
+  {c:"OP07",  n:"500 Years into the Future", max:130},
+  {c:"OP08",  n:"Two Legends",               max:130},
+  {c:"OP09",  n:"Emperors in the New World", max:130},
+  {c:"OP10",  n:"Royal Blood",               max:130},
+  {c:"OP11",  n:"A Fist of Divine Speed",    max:130},
+  {c:"OP12",  n:"Legacy of the Master",      max:135},
+  {c:"OP13",  n:"Carrying On His Will",      max:140},
+  {c:"OP14",  n:"The Azure Sea's Seven",     max:145},
+  {c:"OP15",  n:"Adventure on Kami's Island",max:135},
+  {c:"OP16",  n:"The Time of Battle",        max:140},
+  {c:"EB01",  n:"Memorial Collection",       max:75},
+  {c:"EB02",  n:"Anime 25th Collection",     max:75},
+  {c:"EB03",  n:"Heroines Edition",          max:80},
+  {c:"EB04",  n:"Egghead Crisis",            max:75},
+  {c:"PRB01", n:"The Best Vol.1",            max:60},
+  {c:"PRB02", n:"The Best Vol.2",            max:60},
+];
+const OP_HOSTS = [
+  (set, id) => "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/" + set + "/" + id + "_EN.webp",
+  (set, id) => "https://en.onepiece-cardgame.com/images/cardlist/card/" + id + ".png",
+  (set, id) => "https://asia-en.onepiece-cardgame.com/images/cardlist/card/" + id + ".png"
+];
+
+// ---------- API endpoint ----------
+const YGO_SETS_URL  = "https://db.ygoprodeck.com/api/v7/cardsets.php";
+const YGO_CARDS_URL = "https://db.ygoprodeck.com/api/v7/cardinfo.php?cardset=";
+const LOR_SETS_URL  = "https://api.lorcast.com/v0/sets";
+const LOR_CARDS_URL = (code) => "https://api.lorcast.com/v0/sets/" + encodeURIComponent(code) + "/cards";
+
+// ---------- Stato ----------
+const $ = (id) => document.getElementById(id);
+const nav = $("setNav"), grid = $("grid"), title = $("setTitle"),
+      countEl = $("setCount"), statusEl = $("status");
+let game = "op";                 // op | ygo | lor
+let opCurrent = null, opLoaded = 0, opProbed = 0, opProbeTotal = 0;
+let curPrefix = "";              // prefisso chiavi del set visualizzato
+let ownedInSet = 0;
+let lorSets = null;              // elenco set Lorcana (da API, con cache)
+let ygoSets = null;              // elenco set Yu-Gi-Oh! (da API, con cache)
+
+// ---------- Collezione ----------
+const K_COLL = "optcg_collection", K_TOT = "optcg_set_totals", K_CACHE = "tcg_cache_";
+function loadJSON(k, fb){ try{ return JSON.parse(localStorage.getItem(k)) || fb; }catch(e){ return fb; } }
+function saveJSON(k, v){
+  try{ localStorage.setItem(k, JSON.stringify(v)); }
+  catch(e){ statusEl.textContent = "Impossibile salvare: memoria del browser piena o bloccata."; }
+  if (k === K_TOT && typeof scheduleTotalsPush === "function") scheduleTotalsPush();
+}
+let COLL = loadJSON(K_COLL, {});
+let TOTALS = loadJSON(K_TOT, {});
+function ownedCount(prefix){
+  let n = 0;
+  for (const id in COLL) if (id.startsWith(prefix)) n++;
+  return n;
+}
+function copiesCount(prefix){
+  let n = 0;
+  for (const id in COLL) if (id.startsWith(prefix)) n += COLL[id];
+  return n;
+}
+function setQty(key, delta, fig, out){
+  let q = (COLL[key] || 0) + delta;
+  if (q <= 0){ if (COLL[key]) ownedInSet--; delete COLL[key]; q = 0; }
+  else { if (!COLL[key]) ownedInSet++; COLL[key] = q; }
+  saveJSON(K_COLL, COLL);
+  cloudSetQty(key, q);
+  out.textContent = q;
+  fig.classList.toggle("owned", q >= 1);
+  fig.classList.toggle("dupe", q >= 2);
+  updateSetCount();
+}
+function updateSetCount(){
+  const copies = copiesCount(curPrefix);
+  const found = (game === "op") ? opLoaded + " carte trovate" : grid.children.length + " carte";
+  countEl.textContent = found + " \u00B7 " + ownedInSet + " possedute" +
+    (copies > ownedInSet ? " (" + copies + " copie)" : "");
+}
+
+// ============================================================
+// SUPABASE: configurazione e sincronizzazione
+// >>> INCOLLA QUI I DATI DEL TUO PROGETTO SUPABASE <<<
+// ============================================================
+const SB_URL = "https://cxbqzbpawoqxmevxdgos.supabase.co";      // es. https://abcdefgh.supabase.co
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN4YnF6YnBhd29xeG1ldnhkZ29zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2NzAzNDMsImV4cCI6MjA5OTI0NjM0M30.FMJEJyP9xJNeljlwW3TDMIOPL7StEzxQYp21lbJgTG0";  // Settings > API > anon public
+
+const sb = (SB_URL.startsWith("https://") && window.supabase)
+  ? window.supabase.createClient(SB_URL, SB_KEY) : null;
+let user = null;
+let totalsTimer = null;
+
+function setSyncDot(txt){
+  const d = $("syncDot");
+  d.hidden = !txt; d.textContent = txt || "";
+}
+function authUiRefresh(){
+  $("userMail").hidden = !user;
+  $("userMail").textContent = user ? user.email : "";
+  $("btnAuth").textContent = user ? "Esci" : "Accedi";
+}
+
+$("btnAuth").addEventListener("click", async () => {
+  if (!sb){
+    statusEl.textContent = "Login non configurato: inserisci URL e anon key di Supabase in cima allo script.";
+    return;
+  }
+  if (user){ await sb.auth.signOut(); return; }
+  $("authMsg").textContent = "";
+  $("authModal").classList.add("open");
+});
+$("btnAuthClose").addEventListener("click", () => $("authModal").classList.remove("open"));
+
+async function doAuth(signup){
+  const email = $("authEmail").value.trim();
+  const password = $("authPass").value;
+  if (!email || password.length < 6){ $("authMsg").textContent = "Inserisci email e una password di almeno 6 caratteri."; return; }
+  $("authMsg").textContent = signup ? "Registrazione\u2026" : "Accesso\u2026";
+  const fn = signup
+    ? sb.auth.signUp({email, password})
+    : sb.auth.signInWithPassword({email, password});
+  const {data, error} = await fn;
+  if (error){ $("authMsg").textContent = "Errore: " + error.message; return; }
+  if (signup && data.user && !data.session){
+    $("authMsg").textContent = "Registrazione ok! Controlla l'email per confermare l'account, poi accedi.";
+    return;
+  }
+  $("authModal").classList.remove("open");
+}
+$("btnLogin").addEventListener("click", () => doAuth(false));
+$("btnSignup").addEventListener("click", () => doAuth(true));
+$("authPass").addEventListener("keydown", (e) => { if (e.key === "Enter") doAuth(false); });
+
+if (sb){
+  sb.auth.onAuthStateChange(async (_ev, session) => {
+    const wasUser = user;
+    user = session ? session.user : null;
+    authUiRefresh();
+    if (user && !wasUser) await onLogin();
+    if (!user && wasUser){ setSyncDot(""); statusEl.textContent = "Sei uscito: le modifiche ora restano solo su questo dispositivo."; }
+  });
+}
+
+async function onLogin(){
+  setSyncDot("\u21BB sincronizzo\u2026");
+  try{
+    const {data: items, error} = await sb.from("collection_items").select("card_key, qty");
+    if (error) throw error;
+    const {data: st} = await sb.from("user_state").select("totals").maybeSingle();
+
+    const localKeys = Object.keys(COLL).length;
+    if ((!items || items.length === 0) && localKeys > 0){
+      if (confirm("Il tuo account \u00E8 vuoto ma su questo dispositivo hai " + localKeys +
+        " carte registrate.\nVuoi caricarle nel tuo account?")){
+        await pushAllToCloud();
+      }
+    } else {
+      COLL = {};
+      (items || []).forEach(r => { COLL[r.card_key] = r.qty; });
+      localStorage.setItem(K_COLL, JSON.stringify(COLL));
+      if (st && st.totals) { TOTALS = Object.assign(TOTALS, st.totals); localStorage.setItem(K_TOT, JSON.stringify(TOTALS)); }
+    }
+    setSyncDot("\u2713 sincronizzato");
+    // rinfresca la vista corrente
+    if (!$("overview").hidden) renderOverview();
+    else if (game === "op" && opCurrent !== null) showOp(opCurrent);
+  }catch(e){
+    setSyncDot("");
+    statusEl.textContent = "Errore di sincronizzazione: " + (e.message || e);
+  }
+}
+
+async function cloudSetQty(key, qty){
+  if (!sb || !user) return;
+  setSyncDot("\u21BB");
+  try{
+    if (qty > 0){
+      const {error} = await sb.from("collection_items")
+        .upsert({user_id: user.id, card_key: key, qty: qty, updated_at: new Date().toISOString()});
+      if (error) throw error;
+    } else {
+      const {error} = await sb.from("collection_items")
+        .delete().eq("user_id", user.id).eq("card_key", key);
+      if (error) throw error;
+    }
+    setSyncDot("\u2713 sincronizzato");
+  }catch(e){
+    setSyncDot("\u26A0 non sincronizzato");
+    statusEl.textContent = "Modifica salvata solo in locale (errore rete): " + (e.message || e);
+  }
+}
+
+async function pushAllToCloud(){
+  if (!sb || !user) return;
+  setSyncDot("\u21BB carico tutto\u2026");
+  const rows = Object.keys(COLL).map(k => ({user_id: user.id, card_key: k, qty: COLL[k]}));
+  for (let i = 0; i < rows.length; i += 500){
+    const {error} = await sb.from("collection_items").upsert(rows.slice(i, i + 500));
+    if (error){ setSyncDot("\u26A0 errore"); statusEl.textContent = "Errore caricamento: " + error.message; return; }
+  }
+  await pushTotals();
+  setSyncDot("\u2713 sincronizzato");
+}
+async function pushTotals(){
+  if (!sb || !user) return;
+  await sb.from("user_state").upsert({user_id: user.id, totals: TOTALS, updated_at: new Date().toISOString()});
+}
+function scheduleTotalsPush(){
+  if (!sb || !user) return;
+  clearTimeout(totalsTimer);
+  totalsTimer = setTimeout(pushTotals, 2500);
+}
+
+// ---------- Fabbrica tessera carta ----------
+function makeTile(opt){
+  // opt: {key, label, thumb, big, links[], price, extraClass, onImgError}
+  const q0 = COLL[opt.key] || 0;
+  const fig = document.createElement("figure");
+  fig.className = "card" + (opt.extraClass ? " " + opt.extraClass : "") +
+    (q0 >= 1 ? " owned" : "") + (q0 >= 2 ? " dupe" : "");
+  fig.dataset.id = opt.key;
+
+  const img = document.createElement("img");
+  img.loading = "lazy";
+  img.alt = opt.label;
+  img.src = opt.thumb;
+  if (opt.onImgError) opt.onImgError(img, fig);
+
+  const cap = document.createElement("figcaption");
+  cap.className = "owncap";
+  const lbl = document.createElement("span");
+  lbl.className = "clabel";
+  lbl.textContent = opt.label;
+  lbl.title = opt.label;
+  const step = document.createElement("span");
+  step.className = "stepper";
+  step.addEventListener("click", (e) => e.stopPropagation());
+  const minus = document.createElement("button");
+  minus.textContent = "\u2212";
+  minus.setAttribute("aria-label", "Rimuovi una copia di " + opt.label);
+  const qty = document.createElement("span");
+  qty.className = "qty"; qty.textContent = q0;
+  const plus = document.createElement("button");
+  plus.textContent = "+";
+  plus.setAttribute("aria-label", "Aggiungi una copia di " + opt.label);
+  minus.addEventListener("click", () => setQty(opt.key, -1, fig, qty));
+  plus.addEventListener("click", () => setQty(opt.key, 1, fig, qty));
+  step.appendChild(minus); step.appendChild(qty); step.appendChild(plus);
+  cap.appendChild(lbl); cap.appendChild(step);
+
+  fig.appendChild(img); fig.appendChild(cap);
+  fig.addEventListener("click", () => openZoom(opt.big || img.src, opt.label, opt.links, opt.price));
+  return fig;
+}
+
+// ---------- Cambio gioco ----------
+document.querySelectorAll("#gameTabs button").forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll("#gameTabs button").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    game = b.dataset.g;
+    $("overview").hidden = true;
+    $("setView").hidden = false;
+    $("searchWrap").style.display = (game === "op") ? "" : "none";
+    $("btnScan").style.display = (game === "lor") ? "none" : "";
+    statusEl.textContent = "";
+    if (game === "op"){ $("ygoPicker").style.display = "none"; nav.style.display = "flex"; buildOpNav(); showOp(opCurrent !== null ? opCurrent : 0); }
+    if (game === "ygo"){ nav.style.display = "none"; $("ygoPicker").style.display = "block"; initYgo(); }
+    if (game === "lor"){ $("ygoPicker").style.display = "none"; nav.style.display = "flex"; initLor(); }
+  });
+});
+
+// ============================================================
+// ONE PIECE
+// ============================================================
+function buildOpNav(){
+  nav.innerHTML = "";
+  OP_SETS.forEach((s, i) => {
+    const b = document.createElement("button");
+    b.innerHTML = '<span class="code">' + s.c + '</span><span class="name">' + s.n + '</span>';
+    b.addEventListener("click", () => showOp(i));
+    nav.appendChild(b);
+  });
+}
+function pad3(n){ return String(n).padStart(3, "0"); }
+
+function showOp(i, focusId){
+  opCurrent = i;
+  const s = OP_SETS[i];
+  $("overview").hidden = true; $("setView").hidden = false;
+  [...nav.children].forEach((b, k) => b.classList.toggle("active", k === i));
+  title.textContent = s.c + " \u00B7 " + s.n;
+  countEl.textContent = "Caricamento carte\u2026";
+  grid.innerHTML = "";
+  curPrefix = s.c + "-";
+  opLoaded = 0; opProbed = 0; opProbeTotal = s.max; ownedInSet = ownedCount(curPrefix);
+
+  for (let n = 1; n <= s.max; n++){
+    const id = s.c + "-" + pad3(n);
+    const tile = makeTile({
+      key: id, label: id,
+      thumb: OP_HOSTS[0](s.c, id),
+      links: [
+        {t:"Prezzi \u20AC su Cardmarket", u:"https://www.cardmarket.com/en/OnePiece/Products/Search?searchString=" + id},
+        {t:"Scheda Limitless", u:"https://onepiece.limitlesstcg.com/cards/" + id, alt:true}
+      ],
+      onImgError: (img, fig) => {
+        img.dataset.host = "0";
+        img.addEventListener("error", () => {
+          const h = Number(img.dataset.host) + 1;
+          if (h < OP_HOSTS.length){ img.dataset.host = String(h); img.src = OP_HOSTS[h](s.c, id); }
+          else { fig.remove(); opProbeDone(); }
+        });
+        img.addEventListener("load", () => { opLoaded++; opProbeDone(); });
+      }
+    });
+    grid.appendChild(tile);
+  }
+
+  if (focusId){
+    setTimeout(() => {
+      const el = grid.querySelector('[data-id="' + focusId + '"]');
+      if (el){
+        el.classList.add("hit");
+        el.scrollIntoView({behavior:"smooth", block:"center"});
+        setTimeout(() => el.classList.remove("hit"), 3500);
+      }
+    }, 400);
+  }
+}
+function opProbeDone(){
+  opProbed++;
+  updateSetCount();
+  if (opProbed >= opProbeTotal){
+    if (opLoaded === 0){
+      statusEl.textContent = "Nessuna immagine caricata: controlla la connessione internet e ricarica la pagina.";
+    } else {
+      const s = OP_SETS[opCurrent];
+      if (TOTALS[s.c] !== opLoaded){ TOTALS[s.c] = opLoaded; saveJSON(K_TOT, TOTALS); }
+    }
+  }
+}
+
+// Ricerca per codice carta One Piece
+$("search").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  const raw = e.target.value.trim().toUpperCase().replace(/\s+/g, "");
+  const m = raw.match(/^(OP\d{2}|EB\d{2}|PRB\d{2})-?(\d{1,3})$/);
+  if (!m){ statusEl.textContent = 'Formato non riconosciuto: usa ad esempio "OP05-119".'; return; }
+  const idx = OP_SETS.findIndex(s => s.c === m[1]);
+  if (idx < 0){ statusEl.textContent = "Set " + m[1] + " non presente."; return; }
+  showOp(idx, m[1] + "-" + pad3(Number(m[2])));
+});
+
+// ============================================================
+// Cache API generica (localStorage, TTL 7 giorni)
+// ============================================================
+async function cachedFetch(cacheKey, url, extract){
+  const k = K_CACHE + cacheKey;
+  const hit = loadJSON(k, null);
+  if (hit && Date.now() - hit.t < 7 * 86400000) return hit.d;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const data = extract(await res.json());
+  saveJSON(k, {t: Date.now(), d: data});
+  return data;
+}
+
+// ============================================================
+// YU-GI-OH!
+// ============================================================
+async function initYgo(){
+  title.textContent = "Yu-Gi-Oh!";
+  countEl.textContent = "";
+  grid.innerHTML = "";
+  if (!ygoSets){
+    countEl.textContent = "Scarico l'elenco dei set\u2026";
+    try{
+      ygoSets = await cachedFetch("ygosets", YGO_SETS_URL, (j) =>
+        j.filter(s => s.set_code).map(s => ({n: s.set_name, c: s.set_code, num: s.num_of_cards, d: s.tcg_date || ""}))
+          .sort((a, b) => (b.d || "").localeCompare(a.d || ""))
+      );
+    }catch(e){
+      countEl.textContent = "";
+      statusEl.textContent = "Errore nel caricare i set Yu-Gi-Oh!: controlla la connessione.";
+      return;
+    }
+  }
+  countEl.textContent = ygoSets.length + " set disponibili \u00B7 cerca qui sopra e scegline uno";
+  renderYgoSetList("");
+}
+function renderYgoSetList(q){
+  const list = $("ygoSetList");
+  list.innerHTML = "";
+  if (!ygoSets) return;
+  const needle = q.trim().toLowerCase();
+  const matches = (needle
+    ? ygoSets.filter(s => s.n.toLowerCase().includes(needle) || s.c.toLowerCase().includes(needle))
+    : ygoSets).slice(0, 30);
+  matches.forEach(s => {
+    const row = document.createElement("div");
+    row.className = "ygoSetRow";
+    row.innerHTML = '<span>' + s.n + '</span><span class="meta">' + s.c +
+      ' \u00B7 ' + s.num + ' carte' + (s.d ? ' \u00B7 ' + s.d : '') + '</span>';
+    row.addEventListener("click", () => showYgoSet(s));
+    list.appendChild(row);
+  });
+  if (!matches.length) list.innerHTML = '<div class="ygoSetRow">Nessun set trovato.</div>';
+}
+$("ygoSearch").addEventListener("input", (e) => renderYgoSetList(e.target.value));
+
+async function showYgoSet(s){
+  title.textContent = s.n + " \u00B7 " + s.c;
+  countEl.textContent = "Caricamento carte\u2026";
+  grid.innerHTML = "";
+  statusEl.textContent = "";
+  curPrefix = "ygo:" + s.c + ":";
+  ownedInSet = ownedCount(curPrefix);
+  let cards;
+  try{
+    cards = await cachedFetch("ygo_" + s.c, YGO_CARDS_URL + encodeURIComponent(s.n), (j) =>
+      (j.data || []).map(c => ({
+        id: c.id, n: c.name,
+        s: c.card_images && c.card_images[0] ? c.card_images[0].image_url_small : "",
+        b: c.card_images && c.card_images[0] ? c.card_images[0].image_url : "",
+        p: c.card_prices && c.card_prices[0] ? c.card_prices[0].cardmarket_price : ""
+      }))
+    );
+  }catch(e){
+    countEl.textContent = "";
+    statusEl.textContent = "Errore nel caricare il set: riprova tra qualche secondo.";
+    return;
+  }
+  TOTALS["ygo:" + s.c] = cards.length;
+  TOTALS["ygoname:" + s.c] = s.n;
+  saveJSON(K_TOT, TOTALS);
+  cards.forEach(c => {
+    grid.appendChild(makeTile({
+      key: "ygo:" + s.c + ":" + c.id,
+      label: c.n,
+      thumb: c.s, big: c.b,
+      extraClass: "ygo",
+      price: c.p ? "\u2248 " + c.p + " \u20AC su Cardmarket" : "",
+      links: [
+        {t:"Cerca su Cardmarket", u:"https://www.cardmarket.com/en/YuGiOh/Products/Search?searchString=" + encodeURIComponent(c.n)},
+        {t:"YGOPRODeck", u:"https://ygoprodeck.com/card/?search=" + encodeURIComponent(c.n), alt:true}
+      ]
+    }));
+  });
+  updateSetCount();
+}
+
+// ============================================================
+// LORCANA
+// ============================================================
+async function initLor(){
+  title.textContent = "Disney Lorcana";
+  countEl.textContent = "";
+  grid.innerHTML = "";
+  nav.innerHTML = "";
+  if (!lorSets){
+    countEl.textContent = "Scarico l'elenco dei set\u2026";
+    try{
+      lorSets = await cachedFetch("lorsets", LOR_SETS_URL, (j) =>
+        (j.results || []).map(s => ({c: s.code, n: s.name}))
+      );
+    }catch(e){
+      countEl.textContent = "";
+      statusEl.textContent = "Errore nel caricare i set Lorcana: controlla la connessione.";
+      return;
+    }
+  }
+  lorSets.forEach((s, i) => {
+    const b = document.createElement("button");
+    b.innerHTML = '<span class="code">' + s.c + '</span><span class="name">' + s.n + '</span>';
+    b.title = s.n;
+    b.addEventListener("click", () => showLorSet(i));
+    nav.appendChild(b);
+  });
+  showLorSet(0);
+}
+async function showLorSet(i){
+  const s = lorSets[i];
+  [...nav.children].forEach((b, k) => b.classList.toggle("active", k === i));
+  title.textContent = s.n + " (" + s.c + ")";
+  countEl.textContent = "Caricamento carte\u2026";
+  grid.innerHTML = "";
+  statusEl.textContent = "";
+  curPrefix = "lor:" + s.c + ":";
+  ownedInSet = ownedCount(curPrefix);
+  let cards;
+  try{
+    cards = await cachedFetch("lor_" + s.c, LOR_CARDS_URL(s.c), (j) =>
+      (Array.isArray(j) ? j : (j.results || [])).map(c => ({
+        num: c.collector_number,
+        n: c.name + (c.version ? " \u2013 " + c.version : ""),
+        s: c.image_uris && c.image_uris.digital ? c.image_uris.digital.small : "",
+        b: c.image_uris && c.image_uris.digital ? (c.image_uris.digital.large || c.image_uris.digital.normal) : ""
+      })).sort((a, b) => String(a.num).localeCompare(String(b.num), undefined, {numeric:true}))
+    );
+  }catch(e){
+    countEl.textContent = "";
+    statusEl.textContent = "Errore nel caricare il set: riprova tra qualche secondo.";
+    return;
+  }
+  TOTALS["lor:" + s.c] = cards.length;
+  TOTALS["lorname:" + s.c] = s.n;
+  saveJSON(K_TOT, TOTALS);
+  cards.forEach(c => {
+    grid.appendChild(makeTile({
+      key: "lor:" + s.c + ":" + c.num,
+      label: c.num + " \u00B7 " + c.n,
+      thumb: c.s, big: c.b,
+      links: [
+        {t:"Prezzi \u20AC su Cardmarket", u:"https://www.cardmarket.com/en/Lorcana/Products/Search?searchString=" + encodeURIComponent(c.n.split(" \u2013 ")[0])},
+        {t:"Scheda Lorcast", u:"https://lorcast.com/cards/" + encodeURIComponent(s.c) + "/" + encodeURIComponent(c.num), alt:true}
+      ]
+    }));
+  });
+  updateSetCount();
+}
+
+// ============================================================
+// SCANNER (OCR con Tesseract.js caricato al primo uso)
+// ============================================================
+let tessWorker = null;
+async function getWorker(){
+  if (tessWorker) return tessWorker;
+  statusEl.textContent = "Carico il motore OCR (solo la prima volta)\u2026";
+  if (!window.Tesseract){
+    await new Promise((ok, ko) => {
+      const sc = document.createElement("script");
+      sc.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+      sc.onload = ok; sc.onerror = () => ko(new Error("CDN non raggiungibile"));
+      document.head.appendChild(sc);
+    });
+  }
+  tessWorker = await Tesseract.createWorker("eng");
+  await tessWorker.setParameters({
+    tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/ "
+  });
+  return tessWorker;
+}
+
+// Pre-elaborazione: ridimensiona, scala di grigi, aumenta contrasto
+function preprocess(imgEl){
+  const maxDim = 1600;
+  const scale = Math.min(1, maxDim / Math.max(imgEl.naturalWidth, imgEl.naturalHeight)) || 1;
+  const cv = document.createElement("canvas");
+  cv.width = Math.round(imgEl.naturalWidth * scale);
+  cv.height = Math.round(imgEl.naturalHeight * scale);
+  const ctx = cv.getContext("2d");
+  ctx.drawImage(imgEl, 0, 0, cv.width, cv.height);
+  const d = ctx.getImageData(0, 0, cv.width, cv.height);
+  const px = d.data;
+  for (let i = 0; i < px.length; i += 4){
+    let g = 0.299 * px[i] + 0.587 * px[i+1] + 0.114 * px[i+2];
+    g = (g - 128) * 1.6 + 128;                 // contrasto
+    g = Math.max(0, Math.min(255, g));
+    px[i] = px[i+1] = px[i+2] = g;
+  }
+  ctx.putImageData(d, 0, 0);
+  return cv;
+}
+
+$("btnScan").addEventListener("click", () => $("scanFile").click());
+$("scanFile").addEventListener("change", async () => {
+  const f = $("scanFile").files[0];
+  $("scanFile").value = "";
+  if (!f) return;
+  const url = URL.createObjectURL(f);
+  const imgEl = new Image();
+  try{
+    await new Promise((ok, ko) => { imgEl.onload = ok; imgEl.onerror = ko; imgEl.src = url; });
+    const worker = await getWorker();
+    statusEl.textContent = "Leggo il codice sulla carta\u2026";
+    const {data} = await worker.recognize(preprocess(imgEl));
+    handleScannedText((data.text || "").toUpperCase());
+  }catch(e){
+    statusEl.textContent = "Scansione non riuscita: " + e.message + ". Serve connessione per il motore OCR.";
+  }finally{
+    URL.revokeObjectURL(url);
+  }
+});
+
+function bumpKey(key){
+  COLL[key] = (COLL[key] || 0) + 1;
+  saveJSON(K_COLL, COLL);
+  cloudSetQty(key, COLL[key]);
+  return COLL[key];
+}
+
+async function handleScannedText(text){
+  const clean = text.replace(/[\u2013\u2014]/g, "-");
+
+  // --- One Piece: OP05-119, EB01-061, PRB01-004 ---
+  const mOp = clean.match(/\b(OP|EB|PRB)\s?(\d{2})\s?-\s?(\d{3})\b/);
+  if (mOp){
+    const setCode = mOp[1] + mOp[2];
+    const id = setCode + "-" + mOp[3];
+    const idx = OP_SETS.findIndex(s => s.c === setCode);
+    if (idx < 0){ statusEl.textContent = "Codice letto (" + id + ") ma il set non \u00E8 in elenco."; return; }
+    const q = bumpKey(id);
+    statusEl.textContent = "\u2713 " + id + " aggiunta alla collezione (ora x" + q + ")";
+    switchTab("op");
+    showOp(idx, id);
+    return;
+  }
+
+  // --- Yu-Gi-Oh!: codice stampato tipo MRD-EN060 / LOB-124 ---
+  const mYgo = clean.match(/\b([A-Z]{2,5})-([A-Z]{0,2})(\d{3})\b/);
+  if (mYgo && game !== "op"){
+    const printed = mYgo[1] + "-" + mYgo[2] + mYgo[3];
+    statusEl.textContent = "Codice letto: " + printed + " \u00B7 cerco la carta\u2026";
+    try{
+      const res = await fetch("https://db.ygoprodeck.com/api/v7/cardsetsinfo.php?setcode=" + encodeURIComponent(printed));
+      if (!res.ok) throw new Error("carta non trovata");
+      const info = await res.json();
+      if (!info || !info.id) throw new Error("carta non trovata");
+      const key = "ygo:" + mYgo[1] + ":" + info.id;
+      const q = bumpKey(key);
+      TOTALS["ygoname:" + mYgo[1]] = TOTALS["ygoname:" + mYgo[1]] || info.set_name || mYgo[1];
+      saveJSON(K_TOT, TOTALS);
+      statusEl.textContent = "\u2713 " + (info.name || printed) + " [" + printed + "] aggiunta (ora x" + q + ")";
+    }catch(e){
+      statusEl.textContent = "Codice letto (" + printed + ") ma la carta non risulta nel database.";
+    }
+    return;
+  }
+
+  statusEl.textContent = "Nessun codice riconosciuto. Fotografa da vicino l'angolo con il codice " +
+    "(in basso a sinistra per One Piece, sotto l'illustrazione per Yu-Gi-Oh!) con buona luce.";
+}
+
+// ============================================================
+// Filtri
+// ============================================================
+document.querySelectorAll("#toolbar button").forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll("#toolbar button").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    document.body.classList.remove("filter-owned", "filter-missing", "filter-dupes");
+    if (b.dataset.f === "owned") document.body.classList.add("filter-owned");
+    if (b.dataset.f === "missing") document.body.classList.add("filter-missing");
+    if (b.dataset.f === "dupes") document.body.classList.add("filter-dupes");
+  });
+});
+
+// ============================================================
+// Pannello collezione (tutti i giochi)
+// ============================================================
+$("btnOverview").addEventListener("click", renderOverview);
+function ovRow(rows, label, prefix, tot, onClick){
+  const own = ownedCount(prefix);
+  const pct = tot ? Math.min(100, Math.round(own / tot * 100)) : 0;
+  const row = document.createElement("div");
+  row.className = "ovrow";
+  row.innerHTML =
+    '<span class="ovcode" title="' + label + '">' + label + '</span>' +
+    '<span class="ovbar"><i style="width:' + pct + '%"></i></span>' +
+    '<span class="ovnum">' + own + ' / ' + (tot || "?") + (tot ? " \u00B7 " + pct + "%" : "") + '</span>';
+  if (onClick) row.addEventListener("click", onClick);
+  rows.appendChild(row);
+  return own;
+}
+function renderOverview(){
+  $("setView").hidden = true;
+  $("overview").hidden = false;
+  $("ygoPicker").style.display = "none";
+  nav.style.display = "none";
+  statusEl.textContent = "";
+  const rows = $("ovRows");
+  rows.innerHTML = "";
+  let grandOwned = 0, grandCopies = 0;
+  for (const id in COLL) grandCopies += COLL[id];
+
+  // --- One Piece ---
+  const h1 = document.createElement("div"); h1.className = "ovgame"; h1.textContent = "One Piece"; rows.appendChild(h1);
+  OP_SETS.forEach((s, i) => {
+    grandOwned += ovRow(rows, s.c, s.c + "-", TOTALS[s.c], () => {
+      switchTab("op"); buildOpNav(); showOp(i);
+    });
+  });
+
+  // --- Yu-Gi-Oh! (solo set con carte possedute) ---
+  const h2 = document.createElement("div"); h2.className = "ovgame"; h2.textContent = "Yu-Gi-Oh!"; rows.appendChild(h2);
+  const ygoCodes = new Set();
+  for (const id in COLL) if (id.startsWith("ygo:")) ygoCodes.add(id.split(":")[1]);
+  if (ygoCodes.size === 0){
+    const p = document.createElement("p"); p.className = "ovempty";
+    p.textContent = "Nessuna carta ancora: apri la scheda Yu-Gi-Oh! e scegli un set.";
+    rows.appendChild(p);
+  } else {
+    [...ygoCodes].sort().forEach(code => {
+      const label = TOTALS["ygoname:" + code] || code;
+      grandOwned += ovRow(rows, label, "ygo:" + code + ":", TOTALS["ygo:" + code], () => switchTab("ygo"));
+    });
+  }
+
+  // --- Lorcana ---
+  const h3 = document.createElement("div"); h3.className = "ovgame"; h3.textContent = "Lorcana"; rows.appendChild(h3);
+  const lorCodes = new Set();
+  for (const id in COLL) if (id.startsWith("lor:")) lorCodes.add(id.split(":")[1]);
+  for (const k in TOTALS) if (k.startsWith("lor:")) lorCodes.add(k.slice(4));
+  if (lorCodes.size === 0){
+    const p = document.createElement("p"); p.className = "ovempty";
+    p.textContent = "Nessuna carta ancora: apri la scheda Lorcana per iniziare.";
+    rows.appendChild(p);
+  } else {
+    [...lorCodes].sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric:true})).forEach(code => {
+      const label = TOTALS["lorname:" + code] || ("Set " + code);
+      grandOwned += ovRow(rows, label, "lor:" + code + ":", TOTALS["lor:" + code], () => switchTab("lor"));
+    });
+  }
+
+  $("ovTotal").textContent = "Totale complessivo: " + grandOwned + " carte uniche" +
+    (grandCopies > grandOwned ? " (" + grandCopies + " copie)" : "");
+}
+function switchTab(g){
+  document.querySelectorAll("#gameTabs button").forEach(x => x.classList.toggle("active", x.dataset.g === g));
+  document.querySelector('#gameTabs button[data-g="' + g + '"]').click();
+}
+
+// ============================================================
+// Backup
+// ============================================================
+$("btnExport").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify({collection: COLL, totals: TOTALS}, null, 1)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "tcg-collezione-backup.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+const importFile = $("importFile");
+$("btnImport").addEventListener("click", () => importFile.click());
+importFile.addEventListener("change", () => {
+  const f = importFile.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try{
+      const data = JSON.parse(r.result);
+      COLL = data.collection || {};
+      TOTALS = Object.assign(TOTALS, data.totals || {});
+      saveJSON(K_COLL, COLL); saveJSON(K_TOT, TOTALS);
+      if (sb && user) pushAllToCloud();
+      renderOverview();
+      statusEl.textContent = "Backup importato correttamente.";
+    }catch(e){ statusEl.textContent = "File di backup non valido."; }
+  };
+  r.readAsText(f);
+  importFile.value = "";
+});
+
+// ============================================================
+// Zoom
+// ============================================================
+const zoom = $("zoom"), zoomImg = $("zoomImg"), zoomCap = $("zoomCap"),
+      zoomLinks = $("zoomLinks"), zoomPrice = $("zoomPrice");
+function openZoom(src, label, links, price){
+  zoomImg.src = src; zoomImg.alt = label; zoomCap.textContent = label;
+  zoomPrice.textContent = price || "";
+  zoomLinks.innerHTML = (links || []).map(l =>
+    '<a' + (l.alt ? ' class="alt"' : '') + ' href="' + l.u + '" target="_blank" rel="noopener">' + l.t + '</a>'
+  ).join("");
+  zoom.classList.add("open");
+}
+zoomLinks.addEventListener("click", (e) => e.stopPropagation());
+zoom.addEventListener("click", () => zoom.classList.remove("open"));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") zoom.classList.remove("open"); });
+
+// ---------- Avvio ----------
+buildOpNav();
+showOp(0);
+</script>
+</body>
+</html>
