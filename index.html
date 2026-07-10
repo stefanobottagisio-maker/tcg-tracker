@@ -631,11 +631,11 @@ function chainImg(img, sources){
 // poi la migliore fonte online, altrimenti resta il segnaposto.
 const GAMES = [
   {g:"op",  t:"One Piece Card Game", sub:"Booster OP01\u2013OP16, EB e PRB",
-   srcs: ["img/home-op.jpg", OP_HOSTS[0]("OP01", "OP01-001")]},
+   srcs: ["img/home-op.jpg", () => tcgCover("op", "OP01"), OP_HOSTS[0]("OP01", "OP01-001")]},
   {g:"ygo", t:"Yu-Gi-Oh!", sub:"Tutti i set TCG, prezzi \u20AC inclusi",
    srcs: ["img/home-ygo.jpg", "https://images.ygoprodeck.com/images/cards_cropped/46986414.jpg"]},
   {g:"lor", t:"Disney Lorcana", sub:"Tutti i set, dal Primo Capitolo in poi",
-   srcs: ["img/home-lor.jpg", () => lorCover("1")]}
+   srcs: ["img/home-lor.jpg", () => tcgCover("lor", "1"), () => lorCover("1")]}
 ];
 async function lorCover(code){
   try{
@@ -644,6 +644,55 @@ async function lorCover(code){
       (j) => (j.image_uris && j.image_uris.digital) ? (j.image_uris.digital.normal || j.image_uris.digital.small) : "");
     return d || "";
   }catch(e){ return ""; }
+}
+
+// ---------- Copertine ufficiali dei booster (TCGplayer via TCGCSV) ----------
+const coversPromise = {};
+function coversFor(gameKey){
+  if (!coversPromise[gameKey]) coversPromise[gameKey] = buildCovers(gameKey);
+  return coversPromise[gameKey];
+}
+function tcgCover(gameKey, key){
+  return coversFor(gameKey).then(m => m[key] || "").catch(() => "");
+}
+async function buildCovers(gameKey){
+  const K = K_CACHE + "covers_" + gameKey;
+  const cached = loadJSON(K, null);
+  if (cached && Date.now() - cached.t < 7 * 86400000) return cached.d;
+  const map = {};
+  try{
+    const cats = (await (await fetch("https://tcgcsv.com/tcgplayer/categories")).json()).results || [];
+    const wanted = (gameKey === "op") ? "one piece" : "lorcana";
+    const cat = cats.find(c => ((c.name || "") + " " + (c.displayName || "")).toLowerCase().includes(wanted));
+    if (cat){
+      const groups = (await (await fetch("https://tcgcsv.com/tcgplayer/" + cat.categoryId + "/groups")).json()).results || [];
+      const targets = [];
+      if (gameKey === "op"){
+        OP_SETS.forEach(s => {
+          const g = groups.find(g =>
+            (g.abbreviation || "").toUpperCase().replace(/-/g, "") === s.c ||
+            (g.name || "").toLowerCase().includes(s.n.toLowerCase()));
+          if (g) targets.push({key: s.c, gid: g.groupId});
+        });
+      } else {
+        (lorSets || []).forEach(s => {
+          const g = groups.find(g => (g.name || "").toLowerCase().includes(s.n.toLowerCase()));
+          if (g) targets.push({key: String(s.c), gid: g.groupId});
+        });
+      }
+      await Promise.all(targets.map(async t => {
+        try{
+          const prods = (await (await fetch("https://tcgcsv.com/tcgplayer/" + cat.categoryId + "/" + t.gid + "/products")).json()).results || [];
+          const p = prods.find(x => /booster box/i.test(x.name || "")) ||
+                    prods.find(x => /booster/i.test(x.name || "")) ||
+                    prods.find(x => x.imageUrl);
+          if (p && p.imageUrl) map[t.key] = p.imageUrl.replace("_200w", "_in_1000x1000");
+        }catch(e){ /* singolo set senza copertina: si prosegue */ }
+      }));
+    }
+  }catch(e){ /* TCGCSV non raggiungibile: la catena passa alle fonti successive */ }
+  saveJSON(K, {t: Date.now(), d: map});
+  return map;
 }
 function renderHome(){
   const home = $("home");
@@ -695,6 +744,7 @@ function renderOpSets(){
   OP_SETS.forEach((s, i) => {
     g.appendChild(setTile(s.c, s.n, [
       "img/sets/" + s.c + ".jpg",
+      () => tcgCover("op", s.c),
       OP_HOSTS[0](s.c, s.c + "-001"),
       OP_HOSTS[1](s.c, s.c + "-001"),
       OP_HOSTS[2](s.c, s.c + "-001")
@@ -720,6 +770,7 @@ async function renderLorSets(){
   lorSets.forEach((s, i) => {
     g.appendChild(setTile(String(s.c), s.n, [
       "img/sets/LOR-" + s.c + ".jpg",
+      () => tcgCover("lor", String(s.c)),
       () => lorCover(String(s.c))
     ], "lor:" + s.c + ":", TOTALS["lor:" + s.c], () => showLorSet(i)));
   });
