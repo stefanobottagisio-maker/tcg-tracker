@@ -659,6 +659,21 @@ async function buildCovers(gameKey){
   const K = K_CACHE + "covers_" + gameKey;
   const cached = loadJSON(K, null);
   if (cached && Date.now() - cached.t < 7 * 86400000) return cached.d;
+
+  // 1) File JSON servito dalla stessa origine (generato da GitHub Actions): niente CORS.
+  try{
+    const res = await fetch((gameKey === "op" ? "covers-op.json" : "covers-lor.json") + "?v=" + Date.now());
+    if (res.ok){
+      const map = await res.json();
+      if (map && Object.keys(map).length){
+        saveJSON(K, {t: Date.now(), d: map});
+        return map;
+      }
+    }
+  }catch(e){ /* file assente: si prova TCGCSV diretto qui sotto */ }
+
+  // 2) Ripiego: TCGCSV diretto. Funziona in locale/dev; su GitHub Pages sara'
+  //    bloccato da CORS e la catena immagini passera' alla carta del set.
   const map = {};
   try{
     const cats = (await (await fetch("https://tcgcsv.com/tcgplayer/categories")).json()).results || [];
@@ -690,7 +705,7 @@ async function buildCovers(gameKey){
         }catch(e){ /* singolo set senza copertina: si prosegue */ }
       }));
     }
-  }catch(e){ /* TCGCSV non raggiungibile: la catena passa alle fonti successive */ }
+  }catch(e){ /* TCGCSV non raggiungibile dal browser: la catena passa alle fonti successive */ }
   saveJSON(K, {t: Date.now(), d: map});
   return map;
 }
