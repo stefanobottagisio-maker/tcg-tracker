@@ -62,6 +62,19 @@
     margin-bottom:12px;
   }
   .backBtn:hover{border-color:var(--gold);}
+
+  .langBar{display:flex; align-items:center; gap:8px; margin:0 0 12px; flex-wrap:wrap;}
+  .langLbl{color:var(--mute); font-size:13px;}
+  .langBar button{
+    background:var(--panel); color:var(--parchment); border:1px solid var(--line);
+    border-radius:6px; padding:6px 12px; font:inherit; font-size:13px; cursor:pointer;
+  }
+  .langBar button.active{background:var(--gold); color:var(--sea); border-color:var(--gold); font-weight:600;}
+  .langBar button:hover{border-color:var(--gold);}
+  .langTag{
+    display:inline-block; font-size:10px; padding:1px 5px; border-radius:4px; margin-left:6px;
+    background:var(--line); color:var(--parchment); vertical-align:middle;
+  }
   #setsTitle{
     font-family:"Pirata One",Georgia,serif; font-weight:400;
     font-size:clamp(22px,3vw,30px); margin:4px 0 12px;
@@ -262,6 +275,11 @@
 
   <section id="setsView" hidden>
     <button class="backBtn" id="btnBackHome" type="button">&#8249; Giochi</button>
+    <div id="langBar" class="langBar" hidden>
+      <span class="langLbl">Lingua:</span>
+      <button data-l="en" class="active" type="button">🇬🇧 Inglese</button>
+      <button data-l="jp" type="button">🇯🇵 Giapponese</button>
+    </div>
     <h2 id="setsTitle"></h2>
     <div id="ygoPicker">
       <input id="ygoSearch" type="search" placeholder="Cerca un set Yu-Gi-Oh! (es. Metal Raiders, LOB...)"
@@ -274,6 +292,11 @@
     <button class="backBtn" id="btnBackSets" type="button">&#8249; Espansioni</button>
     <h2 id="setTitle"></h2>
     <p id="setCount"></p>
+    <div id="langBarCards" class="langBar" hidden>
+      <span class="langLbl">Lingua:</span>
+      <button data-l="en" class="active" type="button">🇬🇧 Inglese</button>
+      <button data-l="jp" type="button">🇯🇵 Giapponese</button>
+    </div>
     <div id="toolbar" role="group" aria-label="Filtro possesso">
       <button data-f="all" class="active">Tutte</button>
       <button data-f="owned">Possedute</button>
@@ -381,6 +404,24 @@ let curPrefix = "";              // prefisso chiavi del set visualizzato
 let ownedInSet = 0;
 let lorSets = null;              // elenco set Lorcana (da API, con cache)
 let ygoSets = null;              // elenco set Yu-Gi-Oh! (da API, con cache)
+let curYgoSet = null;            // set Yu-Gi-Oh! attualmente aperto
+
+// ---------- Lingua (EN/JP) ----------
+// La lingua vale solo per One Piece e Yu-Gi-Oh!. Lorcana e' solo inglese.
+// Le chiavi EN restano invariate (retrocompatibili); le carte JP hanno il
+// suffisso "~jp". Cosi' EN e JP sono due collezioni separate della stessa carta.
+const LANG_GAMES = ["op", "ygo"];
+let lang = localStorage.getItem("tcg_lang") === "jp" ? "jp" : "en";
+function langAware(){ return LANG_GAMES.includes(game); }
+function langSuffix(l){ return (l || (langAware() ? lang : "en")) === "jp" ? "~jp" : ""; }
+function isJpKey(id){ return id.endsWith("~jp"); }
+// Applica la lingua corrente a una chiave base (per tessere e scanner)
+function keyWithLang(baseKey){ return baseKey + langSuffix(); }
+// Come sopra ma per un gioco esplicito (usato dallo scanner)
+function keyLangFor(g, baseKey){
+  return baseKey + ((LANG_GAMES.includes(g) && lang === "jp") ? "~jp" : "");
+}
+function langLabel(){ return lang === "jp" ? " [JP]" : ""; }
 
 // ---------- Gestore viste: home | sets | cards | overview ----------
 function showView(v){
@@ -404,14 +445,23 @@ function saveJSON(k, v){
 }
 let COLL = loadJSON(K_COLL, {});
 let TOTALS = loadJSON(K_TOT, {});
-function ownedCount(prefix){
+// langFilter: "en" | "jp" | "any" (default: rispetta la lingua attiva se il gioco la usa)
+function makeLangPred(langFilter){
+  const lf = langFilter || (langAware() ? lang : "any");
+  if (lf === "any") return () => true;
+  if (lf === "jp") return isJpKey;
+  return (id) => !isJpKey(id);            // "en"
+}
+function ownedCount(prefix, langFilter){
+  const ok = makeLangPred(langFilter);
   let n = 0;
-  for (const id in COLL) if (id.startsWith(prefix)) n++;
+  for (const id in COLL) if (id.startsWith(prefix) && ok(id)) n++;
   return n;
 }
-function copiesCount(prefix){
+function copiesCount(prefix, langFilter){
+  const ok = makeLangPred(langFilter);
   let n = 0;
-  for (const id in COLL) if (id.startsWith(prefix)) n += COLL[id];
+  for (const id in COLL) if (id.startsWith(prefix) && ok(id)) n += COLL[id];
   return n;
 }
 function setQty(key, delta, fig, out){
@@ -573,7 +623,7 @@ function makeTile(opt){
   const fig = document.createElement("figure");
   fig.className = "card" + (opt.extraClass ? " " + opt.extraClass : "") +
     (q0 >= 1 ? " owned" : "") + (q0 >= 2 ? " dupe" : "");
-  fig.dataset.id = opt.key;
+  fig.dataset.id = opt.dataId || opt.key;
 
   const img = document.createElement("img");
   img.loading = "lazy";
@@ -732,11 +782,38 @@ $("btnBackSets").addEventListener("click", () => enterGame(game));
 function enterGame(g){
   game = g;
   $("searchWrap").style.display = (game === "op") ? "" : "none";
+  refreshLangBars();
   showView("sets");
-  if (g === "op"){ $("setsTitle").textContent = "One Piece \u00B7 Espansioni"; renderOpSets(); }
-  if (g === "ygo"){ $("setsTitle").textContent = "Yu-Gi-Oh! \u00B7 Set"; $("setsGrid").innerHTML = ""; initYgo(); }
+  const suffix = langAware() && lang === "jp" ? " \u00B7 \ud83c\uddef\ud83c\uddf5 JP" : "";
+  if (g === "op"){ $("setsTitle").textContent = "One Piece \u00B7 Espansioni" + suffix; renderOpSets(); }
+  if (g === "ygo"){ $("setsTitle").textContent = "Yu-Gi-Oh! \u00B7 Set" + suffix; $("setsGrid").innerHTML = ""; initYgo(); }
   if (g === "lor"){ $("setsTitle").textContent = "Disney Lorcana \u00B7 Set"; renderLorSets(); }
 }
+
+// Mostra il selettore lingua solo per i giochi che distinguono EN/JP
+function refreshLangBars(){
+  const show = langAware();
+  ["langBar", "langBarCards"].forEach(idb => {
+    const bar = $(idb);
+    bar.hidden = !show;
+    bar.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.l === lang));
+  });
+}
+function setLang(l){
+  if (l === lang) return;
+  lang = l;
+  localStorage.setItem("tcg_lang", l);
+  refreshLangBars();
+  // Rigenera la vista corrente nella nuova lingua
+  if (!$("setsView").hidden) enterGame(game);
+  else if (!$("setView").hidden){
+    if (game === "op" && opCurrent !== null) showOp(opCurrent);
+    else if (game === "ygo" && curYgoSet) showYgoSet(curYgoSet);
+  }
+}
+document.querySelectorAll("#langBar button, #langBarCards button").forEach(b => {
+  b.addEventListener("click", () => setLang(b.dataset.l));
+});
 
 // Tessera espansione con copertina (catena di fonti) e barra di completamento
 function setTile(code, name, sources, prefix, tot, onClick){
@@ -804,17 +881,27 @@ function showOp(i, focusId){
   const s = OP_SETS[i];
   $("searchWrap").style.display = "";
   showView("cards");
-  title.textContent = s.c + " \u00B7 " + s.n;
+  refreshLangBars();
+  const jp = lang === "jp";
+  title.innerHTML = s.c + " \u00B7 " + s.n + (jp ? ' <span class="langTag">\ud83c\uddef\ud83c\uddf5 JP</span>' : "");
   countEl.textContent = "Caricamento carte\u2026";
   grid.innerHTML = "";
   curPrefix = s.c + "-";
   opLoaded = 0; opProbed = 0; opProbeTotal = s.max; ownedInSet = ownedCount(curPrefix);
 
+  // Fonti immagini per lingua. JP: prima il sito Bandai JP, poi ripiego sull'EN
+  // (il CDN Limitless ha soprattutto la variante _EN), cosi' non resta mai vuoto.
+  const hostsFor = (id) => jp
+    ? [ "https://www.onepiece-cardgame.com/images/cardlist/card/" + id + ".png",
+        OP_HOSTS[0](s.c, id), OP_HOSTS[1](s.c, id) ]
+    : [ OP_HOSTS[0](s.c, id), OP_HOSTS[1](s.c, id), OP_HOSTS[2](s.c, id) ];
+
   for (let n = 1; n <= s.max; n++){
     const id = s.c + "-" + pad3(n);
+    const hosts = hostsFor(id);
     const tile = makeTile({
-      key: id, label: id,
-      thumb: OP_HOSTS[0](s.c, id),
+      key: keyWithLang(id), dataId: id, label: id,
+      thumb: hosts[0],
       links: [
         {t:"Prezzi \u20AC su Cardmarket", u:"https://www.cardmarket.com/en/OnePiece/Products/Search?searchString=" + id},
         {t:"Scheda Limitless", u:"https://onepiece.limitlesstcg.com/cards/" + id, alt:true}
@@ -823,7 +910,7 @@ function showOp(i, focusId){
         img.dataset.host = "0";
         img.addEventListener("error", () => {
           const h = Number(img.dataset.host) + 1;
-          if (h < OP_HOSTS.length){ img.dataset.host = String(h); img.src = OP_HOSTS[h](s.c, id); }
+          if (h < hosts.length){ img.dataset.host = String(h); img.src = hosts[h]; }
           else { fig.remove(); opProbeDone(); }
         });
         img.addEventListener("load", () => { opLoaded++; opProbeDone(); });
@@ -922,11 +1009,16 @@ $("ygoSearch").addEventListener("input", (e) => renderYgoSetList(e.target.value)
 
 async function showYgoSet(s){
   game = "ygo";
+  curYgoSet = s;
   $("searchWrap").style.display = "none";
   showView("cards");
-  title.textContent = s.n + " \u00B7 " + s.c;
+  refreshLangBars();
+  const jp = lang === "jp";
+  title.innerHTML = s.n + " \u00B7 " + s.c + (jp ? ' <span class="langTag">\ud83c\uddef\ud83c\uddf5 JP</span>' : "");
   countEl.textContent = "Caricamento carte\u2026";
   grid.innerHTML = "";
+  if (jp) statusEl.textContent = "Modalit\u00E0 giapponese: segni il possesso della versione JP (per passcode). "
+    + "L'immagine mostrata resta l'arte del database inglese: un'API gratuita per le carte giapponesi non esiste.";
   curPrefix = "ygo:" + s.c + ":";
   ownedInSet = ownedCount(curPrefix);
   let cards;
@@ -949,7 +1041,8 @@ async function showYgoSet(s){
   saveJSON(K_TOT, TOTALS);
   cards.forEach(c => {
     grid.appendChild(makeTile({
-      key: "ygo:" + s.c + ":" + c.id,
+      key: keyWithLang("ygo:" + s.c + ":" + c.id),
+      dataId: "ygo:" + s.c + ":" + c.id,
       label: c.n,
       thumb: c.s, big: c.b,
       extraClass: "ygo",
@@ -971,11 +1064,12 @@ async function showLorSet(i){
   game = "lor";
   $("searchWrap").style.display = "none";
   showView("cards");
+  refreshLangBars();
   title.textContent = s.n + " (" + s.c + ")";
   countEl.textContent = "Caricamento carte\u2026";
   grid.innerHTML = "";
   curPrefix = "lor:" + s.c + ":";
-  ownedInSet = ownedCount(curPrefix);
+  ownedInSet = ownedCount(curPrefix, "any");
   let cards;
   try{
     cards = await cachedFetch("lor_" + s.c, LOR_CARDS_URL(s.c), (j) =>
@@ -1088,8 +1182,8 @@ async function handleScannedText(text){
     const id = setCode + "-" + mOp[3];
     const idx = OP_SETS.findIndex(s => s.c === setCode);
     if (idx < 0){ statusEl.textContent = "Codice letto (" + id + ") ma il set non \u00E8 in elenco."; return; }
-    const q = bumpKey(id);
-    statusEl.textContent = "\u2713 " + id + " aggiunta alla collezione (ora x" + q + ")";
+    const q = bumpKey(keyLangFor("op", id));
+    statusEl.textContent = "\u2713 " + id + langLabel() + " aggiunta alla collezione (ora x" + q + ")";
     showOp(idx, id);
     return;
   }
@@ -1130,11 +1224,11 @@ async function handleScannedText(text){
       if (!res.ok) throw new Error("carta non trovata");
       const info = await res.json();
       if (!info || !info.id) throw new Error("carta non trovata");
-      const key = "ygo:" + mYgo[1] + ":" + info.id;
+      const key = keyLangFor("ygo", "ygo:" + mYgo[1] + ":" + info.id);
       const q = bumpKey(key);
       TOTALS["ygoname:" + mYgo[1]] = TOTALS["ygoname:" + mYgo[1]] || info.set_name || mYgo[1];
       saveJSON(K_TOT, TOTALS);
-      statusEl.textContent = "\u2713 " + (info.name || printed) + " [" + printed + "] aggiunta (ora x" + q + ")";
+      statusEl.textContent = "\u2713 " + (info.name || printed) + " [" + printed + "]" + langLabel() + " aggiunta (ora x" + q + ")";
     }catch(e){
       statusEl.textContent = "Codice letto (" + printed + ") ma la carta non risulta nel database.";
     }
@@ -1164,8 +1258,8 @@ document.querySelectorAll("#toolbar button").forEach(b => {
 // Pannello collezione (tutti i giochi)
 // ============================================================
 $("btnOverview").addEventListener("click", renderOverview);
-function ovRow(rows, label, prefix, tot, onClick){
-  const own = ownedCount(prefix);
+function ovRow(rows, label, prefix, tot, onClick, langFilter){
+  const own = ownedCount(prefix, langFilter);
   const pct = tot ? Math.min(100, Math.round(own / tot * 100)) : 0;
   const row = document.createElement("div");
   row.className = "ovrow";
@@ -1177,6 +1271,11 @@ function ovRow(rows, label, prefix, tot, onClick){
   rows.appendChild(row);
   return own;
 }
+function ovHeader(rows, text){
+  const h = document.createElement("div"); h.className = "ovgame"; h.textContent = text; rows.appendChild(h);
+}
+function hasLangCards(prefix, lf){ return ownedCount(prefix, lf) > 0; }
+
 function renderOverview(){
   showView("overview");
   const rows = $("ovRows");
@@ -1184,32 +1283,41 @@ function renderOverview(){
   let grandOwned = 0, grandCopies = 0;
   for (const id in COLL) grandCopies += COLL[id];
 
-  // --- One Piece ---
-  const h1 = document.createElement("div"); h1.className = "ovgame"; h1.textContent = "One Piece"; rows.appendChild(h1);
-  OP_SETS.forEach((s, i) => {
-    grandOwned += ovRow(rows, s.c, s.c + "-", TOTALS[s.c], () => showOp(i));
+  // --- One Piece: sezione EN sempre, JP solo se ha carte ---
+  const opEnabled = [["en", "Inglese \ud83c\uddec\ud83c\udde7"], ["jp", "Giapponese \ud83c\uddef\ud83c\uddf5"]];
+  opEnabled.forEach(([lf, lbl], idx) => {
+    const anyOp = OP_SETS.some(s => hasLangCards(s.c + "-", lf));
+    if (lf === "jp" && !anyOp) return;             // niente sezione JP vuota
+    ovHeader(rows, "One Piece \u2013 " + lbl);
+    OP_SETS.forEach((s, i) => {
+      grandOwned += ovRow(rows, s.c, s.c + "-", TOTALS[s.c],
+        () => { lang = lf; localStorage.setItem("tcg_lang", lf); showOp(i); }, lf);
+    });
   });
 
-  // --- Yu-Gi-Oh! (solo set con carte possedute) ---
-  const h2 = document.createElement("div"); h2.className = "ovgame"; h2.textContent = "Yu-Gi-Oh!"; rows.appendChild(h2);
-  const ygoCodes = new Set();
-  for (const id in COLL) if (id.startsWith("ygo:")) ygoCodes.add(id.split(":")[1]);
-  if (ygoCodes.size === 0){
-    const p = document.createElement("p"); p.className = "ovempty";
-    p.textContent = "Nessuna carta ancora: apri Yu-Gi-Oh! dalla home e scegli un set.";
-    rows.appendChild(p);
-  } else {
-    [...ygoCodes].sort().forEach(code => {
+  // --- Yu-Gi-Oh!: per lingua, solo set con carte in quella lingua ---
+  ["en", "jp"].forEach(lf => {
+    const codes = new Set();
+    for (const id in COLL){
+      if (!id.startsWith("ygo:")) continue;
+      const jp = isJpKey(id);
+      if ((lf === "jp") !== jp) continue;
+      codes.add(id.split(":")[1]);
+    }
+    if (codes.size === 0) return;
+    ovHeader(rows, "Yu-Gi-Oh! \u2013 " + (lf === "jp" ? "Giapponese \ud83c\uddef\ud83c\uddf5" : "Inglese \ud83c\uddec\ud83c\udde7"));
+    [...codes].sort().forEach(code => {
       const label = TOTALS["ygoname:" + code] || code;
-      grandOwned += ovRow(rows, label, "ygo:" + code + ":", TOTALS["ygo:" + code], () => enterGame("ygo"));
+      grandOwned += ovRow(rows, label, "ygo:" + code + ":", TOTALS["ygo:" + code],
+        () => { lang = lf; localStorage.setItem("tcg_lang", lf); enterGame("ygo"); }, lf);
     });
-  }
+  });
 
-  // --- Lorcana ---
-  const h3 = document.createElement("div"); h3.className = "ovgame"; h3.textContent = "Lorcana"; rows.appendChild(h3);
+  // --- Lorcana (solo inglese) ---
   const lorCodes = new Set();
   for (const id in COLL) if (id.startsWith("lor:")) lorCodes.add(id.split(":")[1]);
   for (const k in TOTALS) if (k.startsWith("lor:")) lorCodes.add(k.slice(4));
+  ovHeader(rows, "Lorcana");
   if (lorCodes.size === 0){
     const p = document.createElement("p"); p.className = "ovempty";
     p.textContent = "Nessuna carta ancora: apri Lorcana dalla home per iniziare.";
@@ -1217,7 +1325,7 @@ function renderOverview(){
   } else {
     [...lorCodes].sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric:true})).forEach(code => {
       const label = TOTALS["lorname:" + code] || ("Set " + code);
-      grandOwned += ovRow(rows, label, "lor:" + code + ":", TOTALS["lor:" + code], () => openLorByCode(code));
+      grandOwned += ovRow(rows, label, "lor:" + code + ":", TOTALS["lor:" + code], () => openLorByCode(code), "any");
     });
   }
 
