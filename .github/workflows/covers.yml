@@ -1,1 +1,39 @@
 
+name: Aggiorna copertine set
+
+# Esegue lo script che scarica le box art da TCGCSV e salva i JSON nel repo.
+# Gira una volta al giorno e si puo' lanciare a mano da Actions > Run workflow.
+on:
+  schedule:
+    - cron: "17 4 * * *"   # ogni giorno alle 04:17 UTC
+  workflow_dispatch: {}      # pulsante manuale
+
+permissions:
+  contents: write            # serve per committare i JSON aggiornati
+
+jobs:
+  covers:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Genera i JSON delle copertine
+        run: python scripts/build-covers.py
+
+      - name: Commit se ci sono modifiche
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add covers-op.json covers-lor.json
+          if git diff --staged --quiet; then
+            echo "Nessuna modifica alle copertine."
+          else
+            git commit -m "Aggiorna copertine set (automatico)"
+            git push
+          fi
