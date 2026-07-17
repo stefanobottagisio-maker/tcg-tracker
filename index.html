@@ -15,6 +15,19 @@
   *{box-sizing:border-box; margin:0; padding:0;}
   body{background:var(--sea); color:var(--parchment); font-family:"IBM Plex Sans",system-ui,sans-serif;}
 
+  #errBar{
+    position:fixed; left:0; right:0; bottom:0; z-index:100;
+    background:#7a1f1a; color:#fff; font-size:13px; line-height:1.4;
+    padding:10px 14px; display:flex; gap:12px; align-items:flex-start;
+    border-top:2px solid #C8372D; box-shadow:0 -4px 20px rgba(0,0,0,.4);
+  }
+  #errBar[hidden]{display:none;}
+  #errText{flex:1; word-break:break-word; font-family:ui-monospace,monospace;}
+  #errClose{
+    background:#fff; color:#7a1f1a; border:none; border-radius:5px;
+    padding:5px 10px; font:inherit; font-weight:600; cursor:pointer; flex:0 0 auto;
+  }
+
   header{
     position:sticky; top:0; z-index:20;
     background:linear-gradient(180deg, #0A1626 75%, rgba(10,22,38,.92));
@@ -71,6 +84,8 @@
   }
   .langBar button.active{background:var(--gold); color:var(--sea); border-color:var(--gold); font-weight:600;}
   .langBar button:hover{border-color:var(--gold);}
+  .langBar button{display:inline-flex; align-items:center; gap:7px;}
+  .flag{width:20px; height:13px; border-radius:2px; flex:0 0 auto; display:block;}
   .langTag{
     display:inline-block; font-size:10px; padding:1px 5px; border-radius:4px; margin-left:6px;
     background:var(--line); color:var(--parchment); vertical-align:middle;
@@ -202,6 +217,38 @@
   #zoomLinks a:hover{filter:brightness(1.1);}
   #zoomPrice{display:block; margin-top:8px; color:var(--gold); font-size:13px;}
 
+  /* Scanner live fotocamera */
+  #camScan{
+    position:fixed; inset:0; z-index:70; display:none; flex-direction:column;
+    background:#05090F;
+  }
+  #camScan.open{display:flex;}
+  #camStage{position:relative; flex:1; overflow:hidden; display:flex; align-items:center; justify-content:center;}
+  #camVideo{width:100%; height:100%; object-fit:cover; background:#05090F;}
+  #camGuide{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:min(78vw,440px); height:132px; border:3px solid var(--gold);
+    border-radius:10px; box-shadow:0 0 0 100vmax rgba(5,9,15,.55);
+    display:flex; align-items:flex-end; justify-content:center;
+  }
+  #camGuideHint{
+    background:rgba(5,9,15,.72); color:var(--parchment); font-size:12px;
+    padding:4px 9px; border-radius:6px; margin-bottom:-26px; white-space:nowrap;
+  }
+  #camBar{
+    background:var(--panel); border-top:1px solid var(--line);
+    padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  }
+  #camStatus{color:var(--parchment); font-size:13px; flex:1; min-width:160px;}
+  #camBtns{display:flex; gap:8px;}
+  #camBar button{
+    background:var(--gold); color:var(--sea); border:none; border-radius:6px;
+    padding:9px 15px; font:inherit; font-weight:600; cursor:pointer;
+  }
+  #camBar button.alt{background:var(--sea); color:var(--parchment); border:1px solid var(--line);}
+  #camBar button:hover{filter:brightness(1.08);}
+  .camLock #camGuide{border-color:#39d353;}
+
   #status{color:var(--mute); font-size:13px; padding:8px 0;}
 
   /* Area utente e login */
@@ -241,6 +288,8 @@
 </style>
 </head>
 <body>
+
+<div id="errBar" role="alert" hidden><span id="errText"></span><button id="errClose" type="button">chiudi</button></div>
 
 <header>
   <h1 id="homeLink" title="Torna alla scelta del gioco">TCG Tracker</h1>
@@ -330,11 +379,26 @@
   immagini e set non ancora visitati; gli elenchi carte di Yu-Gi-Oh! e Lorcana vengono salvati in locale dopo la
   prima visita. La collezione &egrave; salvata nella memoria del browser: usa &ldquo;Esporta backup&rdquo;
   regolarmente. Per Yu-Gi-Oh! il conteggio &egrave; per ristampa nel set visitato (stessa carta in due set = due voci).
-  Scansione: fotografa da vicino e con buona luce il codice stampato sulla carta (One Piece: angolo in basso
-  a sinistra, es. OP05-119; Yu-Gi-Oh!: codice sotto l'illustrazione, es. MRD-EN060; Lorcana: tutta la riga
-  in basso a sinistra, es. 12/204 EN 3 &ndash; se il numero del set non viene letto, apri prima il set giusto).
-  Il motore OCR viene scaricato al primo utilizzo e richiede connessione.
+  Scanner: il pulsante &ldquo;Scansiona carta&rdquo; apre la fotocamera dal vivo &ndash; inquadra il codice
+  stampato nel riquadro e la carta viene riconosciuta e aggiunta da sola (One Piece: angolo in basso a sinistra,
+  es. OP05-119; Yu-Gi-Oh!: codice sotto l'illustrazione, es. MRD-EN060; Lorcana: riga in basso, es. 12/204 EN 3).
+  In alternativa &ldquo;Usa una foto&rdquo; per uno scatto singolo. Il motore OCR viene scaricato al primo
+  utilizzo; la fotocamera dal vivo richiede una connessione HTTPS (come GitHub Pages).
 </footer>
+
+<div id="camScan" role="dialog" aria-modal="true" aria-label="Scanner fotocamera">
+  <div id="camStage">
+    <video id="camVideo" playsinline muted></video>
+    <div id="camGuide"><span id="camGuideHint">Inquadra il codice della carta nel riquadro</span></div>
+  </div>
+  <div id="camBar">
+    <span id="camStatus">Avvio fotocamera\u2026</span>
+    <div id="camBtns">
+      <button id="camPhoto" type="button" class="alt">Usa una foto</button>
+      <button id="camClose" type="button">Chiudi</button>
+    </div>
+  </div>
+</div>
 
 <div id="zoom" role="dialog" aria-modal="true">
   <figure>
@@ -375,6 +439,7 @@ const OP_SETS = [
   {c:"OP14",  n:"The Azure Sea's Seven",     max:145},
   {c:"OP15",  n:"Adventure on Kami's Island",max:135},
   {c:"OP16",  n:"The Time of Battle",        max:140},
+  {c:"OP17",  n:"The World's Strongest Warriors", max:140},
   {c:"EB01",  n:"Memorial Collection",       max:75},
   {c:"EB02",  n:"Anime 25th Collection",     max:75},
   {c:"EB03",  n:"Heroines Edition",          max:80},
@@ -396,6 +461,25 @@ const LOR_CARDS_URL = (code) => "https://api.lorcast.com/v0/sets/" + encodeURICo
 
 // ---------- Stato ----------
 const $ = (id) => document.getElementById(id);
+
+// Segnalazione a schermo di eventuali errori (fondamentale per il debug su mobile,
+// dove non c'e' la console). Mostra il messaggio reale invece di fallire in silenzio.
+function showErr(msg){
+  const bar = $("errBar"); if (!bar) return;
+  $("errText").textContent = "Errore: " + msg;
+  bar.hidden = false;
+}
+window.addEventListener("error", (e) => {
+  showErr((e.message || "sconosciuto") + (e.filename ? "  (" + e.filename.split("/").pop() + ":" + e.lineno + ")" : ""));
+});
+window.addEventListener("unhandledrejection", (e) => {
+  const r = e.reason;
+  showErr("Promise non gestita: " + ((r && (r.message || r)) || "sconosciuto"));
+});
+document.addEventListener("DOMContentLoaded", () => {
+  const c = $("errClose"); if (c) c.addEventListener("click", () => { $("errBar").hidden = true; });
+});
+
 const grid = $("grid"), title = $("setTitle"),
       countEl = $("setCount"), statusEl = $("status");
 let game = "op";                 // op | ygo | lor
@@ -681,11 +765,11 @@ function chainImg(img, sources){
 // poi la migliore fonte online, altrimenti resta il segnaposto.
 const GAMES = [
   {g:"op",  t:"One Piece Card Game", sub:"Booster OP01\u2013OP16, EB e PRB",
-   srcs: ["img/home-op.jpg", () => tcgCover("op", "OP01"), OP_HOSTS[0]("OP01", "OP01-001")]},
+   srcs: ["img/cards/one_piece_title.jpg", "img/cards/one_piece_title.png", "img/home-op.jpg", () => tcgCover("op", "OP01"), OP_HOSTS[0]("OP01", "OP01-001")]},
   {g:"ygo", t:"Yu-Gi-Oh!", sub:"Tutti i set TCG, prezzi \u20AC inclusi",
-   srcs: ["img/home-ygo.jpg", "https://images.ygoprodeck.com/images/cards_cropped/46986414.jpg"]},
+   srcs: ["img/cards/yu_gi_oh_title.jpg", "img/cards/yu_gi_oh_title.png", "img/home-ygo.jpg", "https://images.ygoprodeck.com/images/cards_cropped/46986414.jpg"]},
   {g:"lor", t:"Disney Lorcana", sub:"Tutti i set, dal Primo Capitolo in poi",
-   srcs: ["img/home-lor.jpg", () => tcgCover("lor", "1"), () => lorCover("1")]}
+   srcs: ["img/cards/lorcana_title.jpg", "img/cards/lorcana_title.png", "img/home-lor.jpg", () => tcgCover("lor", "1"), () => lorCover("1")]}
 ];
 async function lorCover(code){
   try{
@@ -767,27 +851,42 @@ function renderHome(){
   GAMES.forEach(G => {
     const el = document.createElement("div");
     el.className = "gamecard";
+    el.dataset.g = G.g;
+    el.setAttribute("role", "button");
+    el.setAttribute("tabindex", "0");
     el.innerHTML = '<img alt="' + G.t + '"><div class="gtitle">' + G.t +
       '</div><div class="gsub">' + G.sub + '</div>';
     chainImg(el.querySelector("img"), G.srcs);
-    el.addEventListener("click", () => enterGame(G.g));
     home.appendChild(el);
   });
   showView("home");
 }
+// Delega: un solo listener sul contenitore, robusto anche su mobile e
+// indipendente dal ridisegno delle card. Gestisce tap e tastiera.
+(function bindHome(){
+  const home = $("home");
+  const go = (e) => {
+    const card = e.target.closest(".gamecard");
+    if (card && card.dataset.g){ enterGame(card.dataset.g); }
+  };
+  home.addEventListener("click", go);
+  home.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") go(e); });
+})();
 $("homeLink").addEventListener("click", renderHome);
 $("btnBackHome").addEventListener("click", renderHome);
 $("btnBackSets").addEventListener("click", () => enterGame(game));
 
 function enterGame(g){
-  game = g;
-  $("searchWrap").style.display = (game === "op") ? "" : "none";
-  refreshLangBars();
-  showView("sets");
-  const suffix = langAware() && lang === "jp" ? " \u00B7 \ud83c\uddef\ud83c\uddf5 JP" : "";
-  if (g === "op"){ $("setsTitle").textContent = "One Piece \u00B7 Espansioni" + suffix; renderOpSets(); }
-  if (g === "ygo"){ $("setsTitle").textContent = "Yu-Gi-Oh! \u00B7 Set" + suffix; $("setsGrid").innerHTML = ""; initYgo(); }
-  if (g === "lor"){ $("setsTitle").textContent = "Disney Lorcana \u00B7 Set"; renderLorSets(); }
+  try{
+    game = g;
+    $("searchWrap").style.display = (game === "op") ? "" : "none";
+    refreshLangBars();
+    showView("sets");
+    const suffix = langAware() && lang === "jp" ? " \u00B7 \ud83c\uddef\ud83c\uddf5 JP" : "";
+    if (g === "op"){ $("setsTitle").textContent = "One Piece \u00B7 Espansioni" + suffix; renderOpSets(); }
+    if (g === "ygo"){ $("setsTitle").textContent = "Yu-Gi-Oh! \u00B7 Set" + suffix; $("setsGrid").innerHTML = ""; initYgo(); }
+    if (g === "lor"){ $("setsTitle").textContent = "Disney Lorcana \u00B7 Set"; renderLorSets(); }
+  }catch(err){ showErr("apertura gioco " + g + ": " + (err && err.message || err)); }
 }
 
 // Mostra il selettore lingua solo per i giochi che distinguono EN/JP
@@ -815,6 +914,24 @@ document.querySelectorAll("#langBar button, #langBarCards button").forEach(b => 
   b.addEventListener("click", () => setLang(b.dataset.l));
 });
 
+// Bandiere SVG inline: le emoji-bandiera non vengono renderizzate su Windows,
+// gli SVG s\u00EC. L'outer SVG ritaglia da solo cio' che esce dal viewBox.
+const FLAG_SVG = {
+  en: '<svg class="flag" viewBox="0 0 60 40" aria-hidden="true">' +
+      '<rect width="60" height="40" fill="#012169"/>' +
+      '<path d="M0,0 L60,40 M60,0 L0,40" stroke="#fff" stroke-width="8"/>' +
+      '<path d="M0,0 L60,40 M60,0 L0,40" stroke="#C8102E" stroke-width="4"/>' +
+      '<path d="M30,0 V40 M0,20 H60" stroke="#fff" stroke-width="12"/>' +
+      '<path d="M30,0 V40 M0,20 H60" stroke="#C8102E" stroke-width="6"/></svg>',
+  jp: '<svg class="flag" viewBox="0 0 60 40" aria-hidden="true">' +
+      '<rect width="60" height="40" fill="#fff" stroke="#ddd" stroke-width="1"/>' +
+      '<circle cx="30" cy="20" r="11" fill="#bc002d"/></svg>'
+};
+const LANG_NAME = {en: "Inglese", jp: "Giapponese"};
+document.querySelectorAll("#langBar button, #langBarCards button").forEach(b => {
+  b.innerHTML = FLAG_SVG[b.dataset.l] + '<span>' + LANG_NAME[b.dataset.l] + '</span>';
+});
+
 // Tessera espansione con copertina (catena di fonti) e barra di completamento
 function setTile(code, name, sources, prefix, tot, onClick){
   const own = ownedCount(prefix);
@@ -835,8 +952,10 @@ function setTile(code, name, sources, prefix, tot, onClick){
 function renderOpSets(){
   const g = $("setsGrid");
   g.innerHTML = "";
+  const dir = lang === "jp" ? "img/sets/jpn/" : "img/sets/eng/";
   OP_SETS.forEach((s, i) => {
     g.appendChild(setTile(s.c, s.n, [
+      dir + s.c + ".jpg",
       "img/sets/" + s.c + ".jpg",
       () => tcgCover("op", s.c),
       OP_HOSTS[0](s.c, s.c + "-001"),
@@ -1145,7 +1264,7 @@ function preprocess(imgEl){
   return cv;
 }
 
-$("btnScan").addEventListener("click", () => $("scanFile").click());
+$("btnScan").addEventListener("click", () => startCamScan());
 $("scanFile").addEventListener("change", async () => {
   const f = $("scanFile").files[0];
   $("scanFile").value = "";
@@ -1172,23 +1291,17 @@ function bumpKey(key){
   return COLL[key];
 }
 
-async function handleScannedText(text){
-  const clean = text.replace(/[\u2013\u2014]/g, "-");
+// --- Rilevamento PURO (nessun effetto): torna {type, canon, ...} o null ---
+function matchCard(rawText){
+  const clean = (rawText || "").toUpperCase().replace(/[\u2013\u2014]/g, "-");
 
-  // --- One Piece: OP05-119, EB01-061, PRB01-004 ---
   const mOp = clean.match(/\b(OP|EB|PRB)\s?(\d{2})\s?-\s?(\d{3})\b/);
   if (mOp){
     const setCode = mOp[1] + mOp[2];
     const id = setCode + "-" + mOp[3];
-    const idx = OP_SETS.findIndex(s => s.c === setCode);
-    if (idx < 0){ statusEl.textContent = "Codice letto (" + id + ") ma il set non \u00E8 in elenco."; return; }
-    const q = bumpKey(keyLangFor("op", id));
-    statusEl.textContent = "\u2713 " + id + langLabel() + " aggiunta alla collezione (ora x" + q + ")";
-    showOp(idx, id);
-    return;
+    return {type: "op", canon: "op:" + id, setCode, id};
   }
 
-  // --- Lorcana: riga in basso tipo "12/204 EN 3" (numero/totale ... set) ---
   const mLor = clean.match(/\b(\d{1,3})\s*\/\s*(\d{2,3})\b/);
   if (mLor){
     const num = String(Number(mLor[1]));
@@ -1196,10 +1309,35 @@ async function handleScannedText(text){
     const after = clean.slice(mLor.index + mLor[0].length);
     const mSet = after.match(/^[^0-9]{0,16}(\d{1,2})\b/);
     if (mSet) setCode = String(Number(mSet[1]));
-    else if (curPrefix.startsWith("lor:")) setCode = curPrefix.split(":")[1]; // set aperto al momento
+    else if (curPrefix.startsWith("lor:")) setCode = curPrefix.split(":")[1];
+    return {type: "lor", canon: "lor:" + (setCode || "?") + ":" + num, num, setCode, total: mLor[2]};
+  }
+
+  const mYgo = clean.match(/\b([A-Z]{2,5})-([A-Z]{0,2})(\d{3})\b/);
+  if (mYgo){
+    const region = mYgo[2];
+    const detected = (region === "JP" || region === "JA") ? "jp" : "en";
+    const printed = mYgo[1] + "-" + region + mYgo[3];
+    return {type: "ygo", canon: "ygo:" + printed, setPrefix: mYgo[1], region, detected, printed};
+  }
+  return null;
+}
+
+// --- Azione a partire da un match (effetti: aggiunge, redirige, aggiorna status) ---
+async function applyCardMatch(m){
+  if (m.type === "op"){
+    const idx = OP_SETS.findIndex(s => s.c === m.setCode);
+    if (idx < 0){ statusEl.textContent = "Codice letto (" + m.id + ") ma il set non \u00E8 in elenco."; return; }
+    const q = bumpKey(keyLangFor("op", m.id));
+    statusEl.textContent = "\u2713 " + m.id + langLabel() + " aggiunta alla collezione (ora x" + q + ")";
+    showOp(idx, m.id);
+    return;
+  }
+  if (m.type === "lor"){
+    let setCode = m.setCode;
     if (!setCode){
-      statusEl.textContent = "Letto il numero " + num + "/" + mLor[2] +
-        " ma non il set: apri prima il set Lorcana giusto e riprova, oppure includi tutta la riga in basso nella foto.";
+      statusEl.textContent = "Letto il numero " + m.num + "/" + m.total +
+        " ma non il set: apri prima il set Lorcana giusto, oppure includi tutta la riga in basso nella foto.";
       return;
     }
     if (!lorSets){
@@ -1207,37 +1345,136 @@ async function handleScannedText(text){
       catch(e){ /* si prosegue comunque */ }
     }
     const known = lorSets && lorSets.find(s => String(s.c) === setCode);
-    const key = "lor:" + setCode + ":" + num;
-    const q = bumpKey(key);
-    statusEl.textContent = "\u2713 Lorcana " + num + " del set " + (known ? known.n : setCode) +
-      " aggiunta (ora x" + q + ")";
+    const q = bumpKey("lor:" + setCode + ":" + m.num);
+    statusEl.textContent = "\u2713 Lorcana " + m.num + " del set " + (known ? known.n : setCode) + " aggiunta (ora x" + q + ")";
     return;
   }
-
-  // --- Yu-Gi-Oh!: codice stampato tipo MRD-EN060 / LOB-124 ---
-  const mYgo = clean.match(/\b([A-Z]{2,5})-([A-Z]{0,2})(\d{3})\b/);
-  if (mYgo){
-    const printed = mYgo[1] + "-" + mYgo[2] + mYgo[3];
-    statusEl.textContent = "Codice letto: " + printed + " \u00B7 cerco la carta\u2026";
+  if (m.type === "ygo"){
+    const langTxt = m.detected === "jp" ? "giapponese \ud83c\uddef\ud83c\uddf5" : "inglese \ud83c\uddec\ud83c\udde7";
+    statusEl.textContent = "Codice letto: " + m.printed + " (" + langTxt + ") \u00B7 cerco la carta\u2026";
     try{
-      const res = await fetch("https://db.ygoprodeck.com/api/v7/cardsetsinfo.php?setcode=" + encodeURIComponent(printed));
+      const res = await fetch("https://db.ygoprodeck.com/api/v7/cardsetsinfo.php?setcode=" + encodeURIComponent(m.printed));
       if (!res.ok) throw new Error("carta non trovata");
       const info = await res.json();
       if (!info || !info.id) throw new Error("carta non trovata");
-      const key = keyLangFor("ygo", "ygo:" + mYgo[1] + ":" + info.id);
-      const q = bumpKey(key);
-      TOTALS["ygoname:" + mYgo[1]] = TOTALS["ygoname:" + mYgo[1]] || info.set_name || mYgo[1];
+      const suffix = m.detected === "jp" ? "~jp" : "";
+      const q = bumpKey("ygo:" + m.setPrefix + ":" + info.id + suffix);
+      TOTALS["ygoname:" + m.setPrefix] = TOTALS["ygoname:" + m.setPrefix] || info.set_name || m.setPrefix;
       saveJSON(K_TOT, TOTALS);
-      statusEl.textContent = "\u2713 " + (info.name || printed) + " [" + printed + "]" + langLabel() + " aggiunta (ora x" + q + ")";
+      statusEl.textContent = "\u2713 " + (info.name || m.printed) + " [" + m.printed + "] " +
+        (m.detected === "jp" ? "[JP]" : "[EN]") + " aggiunta (ora x" + q + ")";
     }catch(e){
-      statusEl.textContent = "Codice letto (" + printed + ") ma la carta non risulta nel database.";
+      statusEl.textContent = m.detected === "jp"
+        ? "Rilevata carta giapponese (" + m.printed + "), ma il database gratuito \u00E8 solo inglese e non risolve i codici set JP. Aprila dal set inglese in modalit\u00E0 \ud83c\uddef\ud83c\uddf5 e segna col +."
+        : "Codice letto (" + m.printed + ") ma la carta non risulta nel database.";
     }
     return;
   }
+}
 
+async function handleScannedText(text){
+  const m = matchCard(text);
+  if (m){ await applyCardMatch(m); return; }
   statusEl.textContent = "Nessun codice riconosciuto. Fotografa da vicino e con buona luce: " +
     "One Piece \u2192 codice in basso a sinistra (OP05-119); Yu-Gi-Oh! \u2192 codice sotto l'illustrazione " +
     "(MRD-EN060); Lorcana \u2192 tutta la riga in basso a sinistra (12/204 EN 3).";
+}
+
+// ============================================================
+// SCANNER LIVE (fotocamera continua, riconoscimento on-device)
+// ============================================================
+let camStream = null, camActive = false, camLastCanon = null;
+const camVideo = $("camVideo"), camScan = $("camScan");
+
+async function startCamScan(){
+  camScan.classList.add("open");
+  camScan.classList.remove("camLock");
+  $("camStatus").textContent = "Avvio fotocamera\u2026";
+  camLastCanon = null;
+  try{
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } }, audio: false
+    });
+  }catch(e){
+    $("camStatus").textContent = "Fotocamera non disponibile (" + (e.name || e.message) +
+      "). Usa \u201CUsa una foto\u201D. Nota: su alcuni browser serve HTTPS.";
+    return;
+  }
+  camVideo.srcObject = camStream;
+  await camVideo.play().catch(() => {});
+  $("camStatus").textContent = "Preparo il motore OCR\u2026";
+  try{ await getWorker(); }catch(e){ $("camStatus").textContent = "Motore OCR non caricato: serve connessione."; return; }
+  camActive = true;
+  $("camStatus").textContent = "Inquadra il codice della carta\u2026";
+  camLoop();
+}
+
+function stopCamScan(){
+  camActive = false;
+  camScan.classList.remove("open");
+  if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  camVideo.srcObject = null;
+}
+$("camClose").addEventListener("click", stopCamScan);
+$("camPhoto").addEventListener("click", () => { stopCamScan(); $("scanFile").click(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && camScan.classList.contains("open")) stopCamScan(); });
+
+// Ritaglia dal video la zona del riquadro guida e la pre-elabora per l'OCR
+function grabGuideCanvas(){
+  const vw = camVideo.videoWidth, vh = camVideo.videoHeight;
+  if (!vw || !vh) return null;
+  // Il riquadro guida e' centrato: ~78% larghezza, ~132px su altezza schermo.
+  // Rapportiamo alla risoluzione reale del video mantenendo una banda centrale.
+  const cropW = Math.round(vw * 0.82);
+  const cropH = Math.round(vh * 0.24);
+  const sx = Math.round((vw - cropW) / 2);
+  const sy = Math.round((vh - cropH) / 2);
+  const scale = Math.min(1, 1000 / cropW);
+  const cv = document.createElement("canvas");
+  cv.width = Math.round(cropW * scale);
+  cv.height = Math.round(cropH * scale);
+  const ctx = cv.getContext("2d");
+  ctx.drawImage(camVideo, sx, sy, cropW, cropH, 0, 0, cv.width, cv.height);
+  const d = ctx.getImageData(0, 0, cv.width, cv.height);
+  const px = d.data;
+  for (let i = 0; i < px.length; i += 4){
+    let g = 0.299 * px[i] + 0.587 * px[i+1] + 0.114 * px[i+2];
+    g = (g - 128) * 1.7 + 128;
+    g = Math.max(0, Math.min(255, g));
+    px[i] = px[i+1] = px[i+2] = g;
+  }
+  ctx.putImageData(d, 0, 0);
+  return cv;
+}
+
+async function camLoop(){
+  if (!camActive) return;
+  let m = null;
+  try{
+    const cv = grabGuideCanvas();
+    if (cv){
+      const worker = await getWorker();
+      const {data} = await worker.recognize(cv);
+      m = matchCard(data.text || "");
+    }
+  }catch(e){ /* fotogramma sfocato o OCR fallito: si riprova */ }
+
+  if (m){
+    // Stabilita': accetto solo se lo stesso codice compare in 2 letture di fila.
+    if (m.canon === camLastCanon && !(m.type === "lor" && !m.setCode)){
+      camScan.classList.add("camLock");
+      $("camStatus").textContent = "\u2713 Carta riconosciuta: " + m.canon.replace(/^op:|^ygo:/, "");
+      const found = m;
+      setTimeout(async () => { stopCamScan(); await applyCardMatch(found); }, 350);
+      return;
+    } else {
+      camLastCanon = m.canon;
+      $("camStatus").textContent = "Rilevato " + m.canon.replace(/^op:|^ygo:|^lor:/, "") + "\u2026 tieni fermo";
+    }
+  } else {
+    camLastCanon = null;
+  }
+  setTimeout(camLoop, 120);   // piccola pausa tra un fotogramma e l'altro
 }
 
 // ============================================================
