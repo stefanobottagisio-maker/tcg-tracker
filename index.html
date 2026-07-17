@@ -58,10 +58,10 @@
 
   /* Home: scelta della collezione */
   #home{
-    display:grid; gap:16px; grid-template-columns:repeat(3, 1fr);
-    max-width:900px; margin:28px auto 0; padding:0 4px;
+    display:grid; gap:22px; grid-template-columns:repeat(3, 1fr);
+    max-width:1200px; margin:34px auto 0; padding:0 16px;
   }
-  @media (max-width:640px){ #home{ grid-template-columns:1fr; max-width:460px; } }
+  @media (max-width:640px){ #home{ grid-template-columns:1fr; max-width:520px; } }
   .gamecard{
     background:var(--panel); border:1px solid var(--line); border-radius:14px;
     overflow:hidden; cursor:pointer; transition:transform .15s, border-color .15s;
@@ -135,6 +135,7 @@
   }
   #ygoPicker input:focus{outline:2px solid var(--gold); outline-offset:1px;}
   .settile.ygo img{aspect-ratio:1/1; object-fit:contain; padding:8px; background:#0E1C30;}
+  .settile.mtg img{aspect-ratio:1/1; object-fit:contain; padding:22px; background:#0E1C30;}
 
   main{padding:16px 18px 60px; max-width:1400px; margin:0 auto;}
   #setTitle{
@@ -466,6 +467,9 @@ const YGO_SETS_URL  = "https://db.ygoprodeck.com/api/v7/cardsets.php";
 const YGO_CARDS_URL = "https://db.ygoprodeck.com/api/v7/cardinfo.php?cardset=";
 const LOR_SETS_URL  = "https://api.lorcast.com/v0/sets";
 const LOR_CARDS_URL = (code) => "https://api.lorcast.com/v0/sets/" + encodeURIComponent(code) + "/cards";
+// Magic: The Gathering via Scryfall (gratuito, CORS abilitato)
+const MTG_SETS_URL  = "https://api.scryfall.com/sets";
+const MTG_CARDS_URL = (code) => "https://api.scryfall.com/cards/search?order=set&unique=prints&q=" + encodeURIComponent("set:" + code);
 
 // ---------- Stato ----------
 const $ = (id) => document.getElementById(id);
@@ -496,6 +500,7 @@ let curPrefix = "";              // prefisso chiavi del set visualizzato
 let ownedInSet = 0;
 let lorSets = null;              // elenco set Lorcana (da API, con cache)
 let ygoSets = null;              // elenco set Yu-Gi-Oh! (da API, con cache)
+let mtgSets = null;              // elenco set Magic (da API, con cache)
 let curYgoSet = null;            // set Yu-Gi-Oh! attualmente aperto
 
 // ---------- Lingua (EN/JP) ----------
@@ -776,7 +781,9 @@ const GAMES = [
   {g:"ygo", t:"Yu-Gi-Oh!", sub:"Tutti i set TCG, prezzi \u20AC inclusi",
    srcs: ["img/cards/yu-gi-oh-title.jpg", "img/cards/yu-gi-oh-title.png", "https://images.ygoprodeck.com/images/cards_cropped/46986414.jpg"]},
   {g:"lor", t:"Disney Lorcana", sub:"Tutti i set, dal Primo Capitolo in poi",
-   srcs: ["img/cards/lorcana-title.jpg", "img/cards/lorcana-title.png", () => tcgCover("lor", "1"), () => lorCover("1")]}
+   srcs: ["img/cards/lorcana-title.jpg", "img/cards/lorcana-title.png", () => tcgCover("lor", "1"), () => lorCover("1")]},
+  {g:"mtg", t:"Magic: The Gathering", sub:"Tutti i set, prezzi \u20AC (Scryfall)",
+   srcs: ["img/cards/magic-title.jpg", "img/cards/magic-title.png", "https://api.scryfall.com/cards/named?exact=Black%20Lotus&format=image&version=art_crop"]}
 ];
 async function lorCover(code){
   try{
@@ -893,6 +900,7 @@ function enterGame(g){
     if (g === "op"){ $("setsTitle").textContent = "One Piece \u00B7 Espansioni" + suffix; renderOpSets(); }
     if (g === "ygo"){ $("setsTitle").textContent = "Yu-Gi-Oh! \u00B7 Set" + suffix; $("setsGrid").innerHTML = ""; initYgo(); }
     if (g === "lor"){ $("setsTitle").textContent = "Disney Lorcana \u00B7 Set"; renderLorSets(); }
+    if (g === "mtg"){ $("setsTitle").textContent = "Magic \u00B7 Set"; $("setsGrid").innerHTML = ""; renderMtgSets(); }
   }catch(err){ showErr("apertura gioco " + g + ": " + (err && err.message || err)); }
 }
 
@@ -1573,6 +1581,17 @@ function renderOverview(){
     });
   }
 
+  // --- Magic (solo set con carte possedute) ---
+  const mtgCodes = new Set();
+  for (const id in COLL) if (id.startsWith("mtg:")) mtgCodes.add(id.split(":")[1]);
+  if (mtgCodes.size){
+    ovHeader(rows, "Magic");
+    [...mtgCodes].sort().forEach(code => {
+      const label = TOTALS["mtgname:" + code] || code.toUpperCase();
+      grandOwned += ovRow(rows, label, "mtg:" + code + ":", TOTALS["mtg:" + code], () => openMtgByCode(code), "any");
+    });
+  }
+
   $("ovTotal").textContent = "Totale complessivo: " + grandOwned + " carte uniche" +
     (grandCopies > grandOwned ? " (" + grandCopies + " copie)" : "");
 }
@@ -1581,6 +1600,103 @@ async function openLorByCode(code){
   if (!lorSets){ await renderLorSets(); }
   const i = lorSets ? lorSets.findIndex(s => String(s.c) === String(code)) : -1;
   if (i >= 0) showLorSet(i); else enterGame("lor");
+}
+
+// ============================================================
+// MAGIC: THE GATHERING (Scryfall)
+// ============================================================
+async function renderMtgSets(){
+  const g = $("setsGrid");
+  g.innerHTML = "";
+  if (!mtgSets){
+    $("setsTitle").textContent = "Magic \u00B7 carico i set\u2026";
+    try{
+      mtgSets = await cachedFetch("mtgsets", MTG_SETS_URL, (j) =>
+        (j.data || [])
+          .filter(s => !s.digital && ["core","expansion","masters","draft_innovation","commander","funny","starter"].includes(s.set_type))
+          .map(s => ({c: s.code, n: s.name, num: s.card_count, d: s.released_at || "", icon: s.icon_svg_uri || ""}))
+          .sort((a, b) => (b.d || "").localeCompare(a.d || ""))
+          .slice(0, 150)
+      );
+    }catch(e){
+      statusEl.textContent = "Errore nel caricare i set Magic: controlla la connessione.";
+      return;
+    }
+    $("setsTitle").textContent = "Magic \u00B7 Set (pi\u00F9 recenti)";
+  }
+  mtgSets.forEach((s, i) => {
+    const el = setTile(s.c.toUpperCase(), s.n, [s.icon], "mtg:" + s.c + ":",
+      TOTALS["mtg:" + s.c] || s.num, () => navSet("mtg", {i:i}));
+    el.classList.add("mtg");
+    g.appendChild(el);
+  });
+}
+
+// Scryfall pagina le carte (175 per pagina): seguo next_page fino a 4 pagine.
+async function fetchMtgCards(code){
+  const K = K_CACHE + "mtg_" + code;
+  const hit = loadJSON(K, null);
+  if (hit && hit.d && hit.d.length && Date.now() - hit.t < 7 * 86400000) return hit.d;
+  let url = MTG_CARDS_URL(code);
+  const out = [];
+  for (let page = 0; page < 4 && url; page++){
+    const res = await fetch(url, {headers: {"Accept": "application/json"}});
+    if (!res.ok) break;
+    const j = await res.json();
+    (j.data || []).forEach(c => {
+      const iu = c.image_uris || (c.card_faces && c.card_faces[0] && c.card_faces[0].image_uris);
+      out.push({
+        num: c.collector_number,
+        n: c.name,
+        s: iu ? iu.small : "",
+        b: iu ? (iu.normal || iu.large) : "",
+        p: c.prices && c.prices.eur ? c.prices.eur : ""
+      });
+    });
+    url = j.has_more ? j.next_page : null;
+    if (url) await new Promise(r => setTimeout(r, 120));  // gentile col rate limit Scryfall
+  }
+  out.sort((a, b) => String(a.num).localeCompare(String(b.num), undefined, {numeric:true}));
+  if (out.length) saveJSON(K, {t: Date.now(), d: out});
+  return out;
+}
+
+async function showMtgSet(i){
+  const s = mtgSets[i];
+  game = "mtg";
+  $("searchWrap").style.display = "none";
+  showView("cards");
+  refreshLangBars();
+  title.textContent = s.n + " (" + s.c.toUpperCase() + ")";
+  countEl.textContent = "Caricamento carte\u2026";
+  grid.innerHTML = "";
+  curPrefix = "mtg:" + s.c + ":";
+  ownedInSet = ownedCount(curPrefix, "any");
+  let cards;
+  try{ cards = await fetchMtgCards(s.c); }
+  catch(e){ countEl.textContent = ""; statusEl.textContent = "Errore nel caricare il set: riprova tra qualche secondo."; return; }
+  TOTALS["mtg:" + s.c] = cards.length;
+  TOTALS["mtgname:" + s.c] = s.n;
+  saveJSON(K_TOT, TOTALS);
+  cards.forEach(c => {
+    grid.appendChild(makeTile({
+      key: "mtg:" + s.c + ":" + c.num,
+      label: c.num + " \u00B7 " + c.n,
+      thumb: c.s, big: c.b,
+      price: c.p ? "\u2248 " + c.p + " \u20AC" : "",
+      links: [
+        {t:"Prezzi \u20AC su Cardmarket", u:"https://www.cardmarket.com/en/Magic/Products/Search?searchString=" + encodeURIComponent(c.n)},
+        {t:"Scheda Scryfall", u:"https://scryfall.com/search?q=" + encodeURIComponent("set:" + s.c + " cn:" + c.num), alt:true}
+      ]
+    }));
+  });
+  updateSetCount();
+}
+async function openMtgByCode(code){
+  game = "mtg";
+  if (!mtgSets){ await renderMtgSets(); }
+  const i = mtgSets ? mtgSets.findIndex(s => String(s.c) === String(code)) : -1;
+  if (i >= 0) showMtgSet(i); else enterGame("mtg");
 }
 
 // ============================================================
@@ -1639,6 +1755,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") zoom.class
 function applySet(g, s){
   if (g === "op") showOp(s.i);
   else if (g === "lor") showLorSet(s.i);
+  else if (g === "mtg") showMtgSet(s.i);
   else if (g === "ygo" && s.set) showYgoSet(s.set);
   else enterGame(g);
 }
@@ -1663,7 +1780,7 @@ window.addEventListener("popstate", (e) => {
 (function initRoute(){
   const h = (location.hash || "").replace(/^#\/?/, "");
   const g = h.split("/")[0];
-  if (["op", "ygo", "lor"].includes(g)){
+  if (["op", "ygo", "lor", "mtg"].includes(g)){
     history.replaceState({v:"game", g:g}, "", "#/" + g);
     enterGame(g);
   } else {
