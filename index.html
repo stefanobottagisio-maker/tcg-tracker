@@ -13,6 +13,7 @@
     --parchment:#EFE3C8; --gold:#E0A82E; --wax:#C8372D; --mute:#8CA3BE;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
+  [hidden]{display:none !important;}
   body{background:var(--sea); color:var(--parchment); font-family:"IBM Plex Sans",system-ui,sans-serif;}
 
   #errBar{
@@ -57,9 +58,10 @@
 
   /* Home: scelta della collezione */
   #home{
-    display:grid; gap:18px; grid-template-columns:1fr;
-    max-width:500px; margin:24px auto 0;
+    display:grid; gap:16px; grid-template-columns:repeat(3, 1fr);
+    max-width:900px; margin:28px auto 0; padding:0 4px;
   }
+  @media (max-width:640px){ #home{ grid-template-columns:1fr; max-width:460px; } }
   .gamecard{
     background:var(--panel); border:1px solid var(--line); border-radius:14px;
     overflow:hidden; cursor:pointer; transition:transform .15s, border-color .15s;
@@ -324,15 +326,9 @@
 </div>
 
 <main>
-  <div id="homeHero" hidden>
-    <h2>La tua collezione TCG</h2>
-    <p>Scegli il gioco per sfogliare le espansioni, tracciare le carte e scansionarle.</p>
-  </div>
   <section id="home">
     <!-- riempita da renderHome() -->
   </section>
-  <p id="homeIntro" hidden>La collezione &egrave; salvata sul tuo account: accedi in alto a destra
-    per ritrovarla su ogni dispositivo.</p>
 
   <section id="setsView" hidden>
     <button class="backBtn" id="btnBackHome" type="button">&#8249; Giochi</button>
@@ -521,9 +517,7 @@ function langLabel(){ return lang === "jp" ? " [JP]" : ""; }
 
 // ---------- Gestore viste: home | sets | cards | overview ----------
 function showView(v){
-  $("homeHero").hidden = v !== "home";
   $("home").hidden = v !== "home";
-  $("homeIntro").hidden = v !== "home";
   $("setsView").hidden = v !== "sets";
   $("setView").hidden = v !== "cards";
   $("overview").hidden = v !== "overview";
