@@ -765,11 +765,11 @@ function chainImg(img, sources){
 // poi la migliore fonte online, altrimenti resta il segnaposto.
 const GAMES = [
   {g:"op",  t:"One Piece Card Game", sub:"Booster OP01\u2013OP16, EB e PRB",
-   srcs: ["img/cards/one_piece_title.jpg", "img/cards/one_piece_title.png", "img/home-op.jpg", () => tcgCover("op", "OP01"), OP_HOSTS[0]("OP01", "OP01-001")]},
+   srcs: ["img/cards/one-piece-title.jpg", "img/cards/one-piece-title.png", "img/cards/one_piece_title.jpg", () => tcgCover("op", "OP01"), OP_HOSTS[0]("OP01", "OP01-001")]},
   {g:"ygo", t:"Yu-Gi-Oh!", sub:"Tutti i set TCG, prezzi \u20AC inclusi",
-   srcs: ["img/cards/yu_gi_oh_title.jpg", "img/cards/yu_gi_oh_title.png", "img/home-ygo.jpg", "https://images.ygoprodeck.com/images/cards_cropped/46986414.jpg"]},
+   srcs: ["img/cards/yu-gi-oh-title.jpg", "img/cards/yu-gi-oh-title.png", "https://images.ygoprodeck.com/images/cards_cropped/46986414.jpg"]},
   {g:"lor", t:"Disney Lorcana", sub:"Tutti i set, dal Primo Capitolo in poi",
-   srcs: ["img/cards/lorcana_title.jpg", "img/cards/lorcana_title.png", "img/home-lor.jpg", () => tcgCover("lor", "1"), () => lorCover("1")]}
+   srcs: ["img/cards/lorcana-title.jpg", "img/cards/lorcana-title.png", () => tcgCover("lor", "1"), () => lorCover("1")]}
 ];
 async function lorCover(code){
   try{
