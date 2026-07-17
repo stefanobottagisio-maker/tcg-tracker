@@ -47,6 +47,14 @@
   }
   .hbtn:hover{border-color:var(--gold);}
 
+  /* Home: hero della landing */
+  #homeHero{max-width:500px; margin:34px auto 0; text-align:center;}
+  #homeHero h2{
+    font-family:"Pirata One",Georgia,serif; font-weight:400;
+    font-size:clamp(30px,6vw,46px); color:var(--gold); letter-spacing:.5px; line-height:1.1;
+  }
+  #homeHero p{color:var(--mute); font-size:14px; margin-top:8px;}
+
   /* Home: scelta della collezione */
   #home{
     display:grid; gap:18px; grid-template-columns:1fr;
@@ -316,11 +324,15 @@
 </div>
 
 <main>
+  <div id="homeHero" hidden>
+    <h2>La tua collezione TCG</h2>
+    <p>Scegli il gioco per sfogliare le espansioni, tracciare le carte e scansionarle.</p>
+  </div>
   <section id="home">
     <!-- riempita da renderHome() -->
   </section>
-  <p id="homeIntro" hidden>Scegli la collezione da gestire. In alto a destra trovi il riepilogo
-    complessivo e l'accesso al tuo account per sincronizzare tra dispositivi.</p>
+  <p id="homeIntro" hidden>La collezione &egrave; salvata sul tuo account: accedi in alto a destra
+    per ritrovarla su ogni dispositivo.</p>
 
   <section id="setsView" hidden>
     <button class="backBtn" id="btnBackHome" type="button">&#8249; Giochi</button>
@@ -509,6 +521,7 @@ function langLabel(){ return lang === "jp" ? " [JP]" : ""; }
 
 // ---------- Gestore viste: home | sets | cards | overview ----------
 function showView(v){
+  $("homeHero").hidden = v !== "home";
   $("home").hidden = v !== "home";
   $("homeIntro").hidden = v !== "home";
   $("setsView").hidden = v !== "sets";
@@ -867,14 +880,14 @@ function renderHome(){
   const home = $("home");
   const go = (e) => {
     const card = e.target.closest(".gamecard");
-    if (card && card.dataset.g){ enterGame(card.dataset.g); }
+    if (card && card.dataset.g){ navGame(card.dataset.g); }
   };
   home.addEventListener("click", go);
   home.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") go(e); });
 })();
-$("homeLink").addEventListener("click", renderHome);
-$("btnBackHome").addEventListener("click", renderHome);
-$("btnBackSets").addEventListener("click", () => enterGame(game));
+$("homeLink").addEventListener("click", navHome);
+$("btnBackHome").addEventListener("click", navHome);
+$("btnBackSets").addEventListener("click", () => navGame(game));
 
 function enterGame(g){
   try{
@@ -961,7 +974,7 @@ function renderOpSets(){
       OP_HOSTS[0](s.c, s.c + "-001"),
       OP_HOSTS[1](s.c, s.c + "-001"),
       OP_HOSTS[2](s.c, s.c + "-001")
-    ], s.c + "-", TOTALS[s.c], () => showOp(i)));
+    ], s.c + "-", TOTALS[s.c], () => navSet("op", {i})));
   });
 }
 
@@ -985,7 +998,7 @@ async function renderLorSets(){
       "img/sets/LOR-" + s.c + ".jpg",
       () => tcgCover("lor", String(s.c)),
       () => lorCover(String(s.c))
-    ], "lor:" + s.c + ":", TOTALS["lor:" + s.c], () => showLorSet(i)));
+    ], "lor:" + s.c + ":", TOTALS["lor:" + s.c], () => navSet("lor", {i})));
   });
 }
 
@@ -1118,7 +1131,7 @@ function renderYgoSetList(q){
     const el = setTile(s.c, s.n + " \u00B7 " + s.num + " carte" + (s.d ? " \u00B7 " + s.d : ""), [
       "img/sets/YGO-" + s.c + ".jpg",
       "https://images.ygoprodeck.com/images/sets/" + encodeURIComponent(s.c) + ".jpg"
-    ], "ygo:" + s.c + ":", TOTALS["ygo:" + s.c] || s.num, () => showYgoSet(s));
+    ], "ygo:" + s.c + ":", TOTALS["ygo:" + s.c] || s.num, () => navSet("ygo", {set:s}));
     el.classList.add("ygo");
     g.appendChild(el);
   });
@@ -1494,7 +1507,7 @@ document.querySelectorAll("#toolbar button").forEach(b => {
 // ============================================================
 // Pannello collezione (tutti i giochi)
 // ============================================================
-$("btnOverview").addEventListener("click", renderOverview);
+$("btnOverview").addEventListener("click", navOverview);
 function ovRow(rows, label, prefix, tot, onClick, langFilter){
   const own = ownedCount(prefix, langFilter);
   const pct = tot ? Math.min(100, Math.round(own / tot * 100)) : 0;
@@ -1625,8 +1638,45 @@ zoomLinks.addEventListener("click", (e) => e.stopPropagation());
 zoom.addEventListener("click", () => zoom.classList.remove("open"));
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") zoom.classList.remove("open"); });
 
-// ---------- Avvio ----------
-renderHome();
+// ============================================================
+// ROUTER (History API): ogni vista e' una "pagina" con URL e
+// supporto ai tasti Indietro/Avanti del browser.
+// ============================================================
+function applySet(g, s){
+  if (g === "op") showOp(s.i);
+  else if (g === "lor") showLorSet(s.i);
+  else if (g === "ygo" && s.set) showYgoSet(s.set);
+  else enterGame(g);
+}
+function navHome(){ history.pushState({v:"home"}, "", "#"); renderHome(); }
+function navGame(g){ history.pushState({v:"game", g:g}, "", "#/" + g); enterGame(g); }
+function navOverview(){ history.pushState({v:"overview"}, "", "#/collezione"); renderOverview(); }
+function navSet(g, payload){
+  const st = Object.assign({v:"set", g:g}, payload);
+  history.pushState(st, "", "#/" + g + "/set");
+  applySet(g, st);
+}
+window.addEventListener("popstate", (e) => {
+  const s = e.state;
+  if (!s || s.v === "home"){ renderHome(); return; }
+  if (s.v === "game"){ enterGame(s.g); return; }
+  if (s.v === "overview"){ renderOverview(); return; }
+  if (s.v === "set"){ applySet(s.g, s); return; }
+  renderHome();
+});
+
+// ---------- Avvio (con deep-link dall'URL) ----------
+(function initRoute(){
+  const h = (location.hash || "").replace(/^#\/?/, "");
+  const g = h.split("/")[0];
+  if (["op", "ygo", "lor"].includes(g)){
+    history.replaceState({v:"game", g:g}, "", "#/" + g);
+    enterGame(g);
+  } else {
+    history.replaceState({v:"home"}, "", "#");
+    renderHome();
+  }
+})();
 </script>
 </body>
 </html>
