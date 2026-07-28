@@ -3,14 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TCG Tracker · One Piece / Yu-Gi-Oh! / Lorcana</title>
+<title>Collezionista Matto · One Piece / Yu-Gi-Oh! / Lorcana / Magic / LEGO</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
-    --sea:#0A1626; --panel:#12233A; --line:#23405E;
-    --parchment:#EFE3C8; --gold:#E0A82E; --wax:#C8372D; --mute:#8CA3BE;
+    --sea:#15161A; --panel:#1F2126; --line:#34363D;
+    --parchment:#F1F0ED; --gold:#C74634; --wax:#DE5B46; --mute:#96999F;
+    --panel2:#262830; --radius-sm:8px; --radius-md:12px; --radius-lg:16px;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   [hidden]{display:none !important;}
@@ -18,41 +19,41 @@
 
   #errBar{
     position:fixed; left:0; right:0; bottom:0; z-index:100;
-    background:#7a1f1a; color:#fff; font-size:13px; line-height:1.4;
+    background:#3A1512; color:#F1F0ED; font-size:13px; line-height:1.4;
     padding:10px 14px; display:flex; gap:12px; align-items:flex-start;
-    border-top:2px solid #C8372D; box-shadow:0 -4px 20px rgba(0,0,0,.4);
+    border-top:2px solid var(--wax); box-shadow:0 -4px 20px rgba(0,0,0,.4);
   }
   #errBar[hidden]{display:none;}
   #errText{flex:1; word-break:break-word; font-family:ui-monospace,monospace;}
   #errClose{
-    background:#fff; color:#7a1f1a; border:none; border-radius:5px;
+    background:#F1F0ED; color:#3A1512; border:none; border-radius:var(--radius-sm);
     padding:5px 10px; font:inherit; font-weight:600; cursor:pointer; flex:0 0 auto;
   }
 
   header{
     position:sticky; top:0; z-index:20;
-    background:linear-gradient(180deg, #0A1626 75%, rgba(10,22,38,.92));
+    background:linear-gradient(180deg, #15161A 75%, rgba(21,22,26,.92));
     border-bottom:1px solid var(--line);
     padding:14px 18px 10px;
     display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center;
   }
   h1{
-    font-family:"Pirata One",Georgia,serif; font-weight:400;
-    font-size:clamp(24px,4vw,34px); letter-spacing:.5px; color:var(--gold);
-    cursor:pointer;
+    font-family:"IBM Plex Sans",system-ui,sans-serif; font-weight:800; letter-spacing:-.02em;
+    font-size:clamp(19px,4.2vw,32px); color:var(--gold);
+    cursor:pointer; white-space:nowrap;
   }
-  h1:hover{text-shadow:0 0 12px rgba(224,168,46,.45);}
+  h1:hover{text-shadow:0 0 14px rgba(199,70,52,.4);}
   .hbtn{
     margin-left:auto; background:var(--panel); color:var(--parchment); border:1px solid var(--line);
-    border-radius:6px; padding:7px 13px; font:inherit; font-size:13px; cursor:pointer;
+    border-radius:999px; padding:8px 16px; font:inherit; font-size:13px; cursor:pointer; transition:border-color .15s, background .15s;
   }
-  .hbtn:hover{border-color:var(--gold);}
+  .hbtn:hover{border-color:var(--gold); background:var(--panel2);}
 
   /* Home: hero della landing */
   #homeHero{max-width:500px; margin:34px auto 0; text-align:center;}
   #homeHero h2{
-    font-family:"Pirata One",Georgia,serif; font-weight:400;
-    font-size:clamp(30px,6vw,46px); color:var(--gold); letter-spacing:.5px; line-height:1.1;
+    font-family:"IBM Plex Sans",system-ui,sans-serif; font-weight:800; letter-spacing:-.02em;
+    font-size:clamp(30px,6vw,46px); color:var(--gold); line-height:1.1;
   }
   #homeHero p{color:var(--mute); font-size:14px; margin-top:8px;}
 
@@ -63,16 +64,16 @@
   }
   @media (max-width:640px){ #home{ grid-template-columns:1fr; max-width:520px; } }
   .gamecard{
-    background:var(--panel); border:1px solid var(--line); border-radius:14px;
-    overflow:hidden; cursor:pointer; transition:transform .15s, border-color .15s;
+    background:var(--panel); border:1px solid var(--line); border-radius:18px;
+    overflow:hidden; cursor:pointer; transition:transform .15s, border-color .15s, box-shadow .15s;
   }
-  .gamecard:hover{transform:translateY(-4px); border-color:var(--gold);}
+  .gamecard:hover{transform:translateY(-4px); border-color:var(--gold); box-shadow:0 12px 28px rgba(0,0,0,.35);}
   .gamecard img{
     display:block; width:100%; aspect-ratio:16/9; object-fit:cover; object-position:center;
-    background:linear-gradient(135deg, #16304e, #0E1C30);
+    background:linear-gradient(135deg, #262830, #1B1C21);
   }
   .gamecard .gtitle{
-    font-family:"Pirata One",Georgia,serif; font-size:24px; color:var(--gold);
+    font-family:"IBM Plex Sans",system-ui,sans-serif; font-weight:800; letter-spacing:-.01em; font-size:22px; color:var(--gold);
     padding:12px 14px 2px;
   }
   .gamecard .gsub{color:var(--mute); font-size:12px; padding:0 14px 14px;}
@@ -81,41 +82,41 @@
   /* Griglia delle espansioni con copertina */
   .backBtn{
     background:var(--panel); color:var(--parchment); border:1px solid var(--line);
-    border-radius:6px; padding:7px 13px; font:inherit; font-size:13px; cursor:pointer;
-    margin-bottom:12px;
+    border-radius:999px; padding:8px 16px; font:inherit; font-size:13px; cursor:pointer;
+    margin-bottom:12px; transition:border-color .15s, background .15s;
   }
-  .backBtn:hover{border-color:var(--gold);}
+  .backBtn:hover{border-color:var(--gold); background:var(--panel2);}
 
   .langBar{display:flex; align-items:center; gap:8px; margin:0 0 12px; flex-wrap:wrap;}
   .langLbl{color:var(--mute); font-size:13px;}
   .langBar button{
     background:var(--panel); color:var(--parchment); border:1px solid var(--line);
-    border-radius:6px; padding:6px 12px; font:inherit; font-size:13px; cursor:pointer;
+    border-radius:999px; padding:6px 14px; font:inherit; font-size:13px; cursor:pointer; transition:border-color .15s, background .15s;
   }
-  .langBar button.active{background:var(--gold); color:var(--sea); border-color:var(--gold); font-weight:600;}
+  .langBar button.active{background:var(--gold); color:#fff; border-color:var(--gold); font-weight:600;}
   .langBar button:hover{border-color:var(--gold);}
   .langBar button{display:inline-flex; align-items:center; gap:7px;}
   .flag{width:20px; height:13px; border-radius:2px; flex:0 0 auto; display:block;}
   .langTag{
-    display:inline-block; font-size:10px; padding:1px 5px; border-radius:4px; margin-left:6px;
-    background:var(--line); color:var(--parchment); vertical-align:middle;
+    display:inline-block; font-size:10px; padding:2px 7px; border-radius:999px; margin-left:6px;
+    background:var(--panel2); border:1px solid var(--line); color:var(--parchment); vertical-align:middle;
   }
   #setsTitle{
-    font-family:"Pirata One",Georgia,serif; font-weight:400;
+    font-family:"IBM Plex Sans",system-ui,sans-serif; font-weight:700; letter-spacing:-.01em;
     font-size:clamp(22px,3vw,30px); margin:4px 0 12px;
   }
   #setsGrid{display:grid; gap:12px; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr));}
   .settile{
-    background:var(--panel); border:1px solid var(--line); border-radius:10px;
-    overflow:hidden; cursor:pointer; text-align:center; transition:transform .12s, border-color .12s;
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-lg);
+    overflow:hidden; cursor:pointer; text-align:center; transition:transform .12s, border-color .12s, box-shadow .12s;
   }
-  .settile:hover{transform:translateY(-3px); border-color:var(--gold);}
+  .settile:hover{transform:translateY(-3px); border-color:var(--gold); box-shadow:0 10px 24px rgba(0,0,0,.3);}
   .settile img{
     display:block; width:100%; aspect-ratio:600/700; object-fit:cover; object-position:center 12%;
-    background:#0E1C30;
+    background:#1B1C21;
   }
   .settile .scode{
-    font-family:"Pirata One",Georgia,serif; font-size:18px; letter-spacing:1px;
+    font-family:"IBM Plex Sans",system-ui,sans-serif; font-weight:700; font-size:17px; letter-spacing:0;
     color:var(--gold); padding-top:7px;
   }
   .settile .sname{
@@ -124,32 +125,33 @@
   }
   .settile .sbar{
     height:6px; margin:7px 10px 10px; background:var(--sea);
-    border:1px solid var(--line); border-radius:4px; overflow:hidden;
+    border:1px solid var(--line); border-radius:999px; overflow:hidden;
   }
-  .settile .sbar i{display:block; height:100%; background:linear-gradient(90deg,var(--gold),#f0c35a);}
+  .settile .sbar i{display:block; height:100%; background:linear-gradient(90deg,var(--gold),var(--wax));}
   .settile .sprog{font-size:10px; color:var(--mute); padding-bottom:8px; margin-top:-6px; display:block;}
   #ygoPicker{display:none; padding:4px 0 12px;}
   #ygoPicker input{
     width:min(420px,100%); background:var(--panel); border:1px solid var(--line);
-    color:var(--parchment); border-radius:6px; padding:9px 12px; font:inherit;
+    color:var(--parchment); border-radius:999px; padding:9px 16px; font:inherit;
   }
   #ygoPicker input:focus{outline:2px solid var(--gold); outline-offset:1px;}
-  .settile.ygo img{aspect-ratio:1/1; object-fit:contain; padding:8px; background:#0E1C30;}
-  .settile.mtg img{aspect-ratio:1/1; object-fit:contain; padding:22px; background:#0E1C30;}
+  .settile.ygo img{aspect-ratio:1/1; object-fit:contain; padding:8px; background:#1B1C21;}
+  .settile.mtg img{aspect-ratio:1/1; object-fit:contain; padding:22px; background:#1B1C21;}
 
   main{padding:16px 18px 60px; max-width:1400px; margin:0 auto;}
   #setTitle{
-    font-family:"Pirata One",Georgia,serif; font-weight:400;
+    font-family:"IBM Plex Sans",system-ui,sans-serif; font-weight:700; letter-spacing:-.01em;
     font-size:clamp(20px,3vw,28px); margin:6px 0 2px;
   }
   #setCount{color:var(--mute); font-size:13px; margin-bottom:14px;}
 
   #grid{display:grid; gap:12px; grid-template-columns:repeat(auto-fill, minmax(138px, 1fr));}
-  .card{background:var(--panel); border:1px solid var(--line); border-radius:8px;
-    overflow:hidden; cursor:zoom-in; transition:transform .12s;}
-  .card:hover{transform:translateY(-3px); border-color:var(--gold);}
-  .card img{display:block; width:100%; aspect-ratio:600/838; object-fit:cover; background:#0E1C30;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-md);
+    overflow:hidden; cursor:zoom-in; transition:transform .12s, box-shadow .12s;}
+  .card:hover{transform:translateY(-3px); border-color:var(--gold); box-shadow:0 8px 20px rgba(0,0,0,.3);}
+  .card img{display:block; width:100%; aspect-ratio:600/838; object-fit:cover; background:#1B1C21;}
   .card.ygo img{aspect-ratio:421/614;}
+  .card.lego img{aspect-ratio:4/3; object-fit:contain; background:#fff; padding:6px;}
   .card figcaption{
     font-size:11px; letter-spacing:.3px; color:var(--mute);
     text-align:center; padding:5px 4px 0;
@@ -161,8 +163,8 @@
   .card .clabel{max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 4px;}
   .stepper{display:flex; align-items:center; gap:2px;}
   .stepper button{
-    width:26px; height:24px; border:1px solid var(--line); background:var(--sea);
-    color:var(--parchment); border-radius:5px; font-size:15px; line-height:1; cursor:pointer;
+    width:26px; height:26px; border:1px solid var(--line); background:var(--sea);
+    color:var(--parchment); border-radius:999px; font-size:15px; line-height:1; cursor:pointer; transition:border-color .15s;
   }
   .stepper button:hover{border-color:var(--gold);}
   .stepper .qty{min-width:26px; text-align:center; font-size:13px; font-weight:600; color:var(--mute);}
@@ -177,19 +179,19 @@
   #toolbar{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 14px;}
   #toolbar button, #overview button, #ovActions button{
     background:var(--panel); color:var(--parchment); border:1px solid var(--line);
-    border-radius:6px; padding:7px 13px; font:inherit; font-size:13px; cursor:pointer;
+    border-radius:999px; padding:8px 15px; font:inherit; font-size:13px; cursor:pointer; transition:border-color .15s, background .15s;
   }
-  #toolbar button.active{background:var(--gold); color:var(--sea); border-color:var(--gold); font-weight:600;}
-  #toolbar button:hover, #overview button:hover{border-color:var(--gold);}
+  #toolbar button.active{background:var(--gold); color:#fff; border-color:var(--gold); font-weight:600;}
+  #toolbar button:hover, #overview button:hover{border-color:var(--gold); background:var(--panel2);}
   #searchWrap{margin-left:auto;}
   #search{
     background:var(--panel); border:1px solid var(--line);
-    color:var(--parchment); border-radius:6px; padding:7px 12px; font:inherit; width:min(220px,100%);
+    color:var(--parchment); border-radius:999px; padding:8px 16px; font:inherit; width:min(220px,100%);
   }
 
   /* Pannello collezione */
   #overview h2, .ovgame{
-    font-family:"Pirata One",Georgia,serif; font-weight:400;
+    font-family:"IBM Plex Sans",system-ui,sans-serif; font-weight:700; letter-spacing:-.01em;
     font-size:clamp(20px,3vw,28px); margin:6px 0 4px;
   }
   .ovgame{margin-top:22px; color:var(--gold); border-bottom:1px solid var(--line); padding-bottom:4px;}
@@ -199,13 +201,52 @@
     padding:9px 0; border-bottom:1px solid var(--line); cursor:pointer;
   }
   .ovrow:hover .ovcode{color:var(--gold);}
-  .ovcode{font-family:"Pirata One",Georgia,serif; font-size:17px; letter-spacing:1px;
+  .ovcode{font-family:"IBM Plex Sans",system-ui,sans-serif; font-weight:700; font-size:16px; letter-spacing:0;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .ovbar{height:10px; background:var(--panel); border:1px solid var(--line); border-radius:6px; overflow:hidden;}
-  .ovbar i{display:block; height:100%; background:linear-gradient(90deg,var(--gold),#f0c35a);}
+  .ovbar i{display:block; height:100%; background:linear-gradient(90deg,var(--gold),var(--wax));}
   .ovnum{font-size:12px; color:var(--mute); text-align:right;}
   .ovempty{color:var(--mute); font-size:13px; padding:8px 0;}
   #ovActions{display:flex; gap:8px; flex-wrap:wrap; margin-top:18px;}
+  #listOut{
+    width:100%; margin-top:14px; min-height:160px; background:var(--panel);
+    border:1px solid var(--line); color:var(--parchment); border-radius:var(--radius-md);
+    padding:12px; font-family:ui-monospace,monospace; font-size:12px; line-height:1.5;
+  }
+
+  /* Wishlist */
+  .wishBtn{
+    background:none; border:1px solid var(--line); border-radius:999px;
+    width:26px; height:26px; cursor:pointer; font-size:13px; line-height:1;
+    color:var(--mute); flex:0 0 auto; transition:border-color .15s, color .15s;
+  }
+  .wishBtn:hover{border-color:var(--gold);}
+  .wishBtn.on{color:var(--wax); border-color:var(--wax); background:rgba(199,70,52,.14);}
+  .card.wished{box-shadow:0 0 0 1px var(--wax) inset;}
+  body.filter-wish .card:not(.wished){display:none;}
+
+  /* Statistiche */
+  #statsBody{max-width:640px;}
+  .statBlock{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-lg);
+    padding:16px 18px; margin-bottom:14px;
+  }
+  .statBlock h3{
+    font-family:"IBM Plex Sans",system-ui,sans-serif; font-weight:700; letter-spacing:-.01em; color:var(--gold);
+    font-size:19px; margin-bottom:8px;
+  }
+  .statNum{font-size:28px; font-weight:600; color:var(--parchment);}
+  .statLbl{color:var(--mute); font-size:12px;}
+  .statGrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:12px;}
+  .statBar{display:grid; grid-template-columns:110px 1fr 70px; gap:8px; align-items:center; padding:6px 0; font-size:13px;}
+  .statBar .sbtrack{height:9px; background:var(--sea); border:1px solid var(--line); border-radius:5px; overflow:hidden;}
+  .statBar .sbfill{height:100%; background:linear-gradient(90deg,var(--gold),var(--wax));}
+  .toplist{list-style:none;}
+  .toplist li{
+    display:flex; justify-content:space-between; gap:10px; padding:7px 0;
+    border-bottom:1px solid var(--line); font-size:13px;
+  }
+  .toplist .tval{color:var(--gold); font-weight:600; white-space:nowrap;}
 
   /* Zoom overlay */
   #zoom{
@@ -214,15 +255,15 @@
     cursor:zoom-out;
   }
   #zoom.open{display:flex;}
-  #zoom img{max-height:86vh; max-width:94vw; border-radius:10px; box-shadow:0 12px 50px rgba(0,0,0,.6);}
+  #zoom img{max-height:86vh; max-width:94vw; border-radius:var(--radius-lg); box-shadow:0 12px 50px rgba(0,0,0,.6);}
   #zoom figcaption{
     position:fixed; bottom:14px; left:0; right:0; text-align:center;
     font-size:14px; color:var(--parchment); letter-spacing:.5px;
   }
   #zoomLinks{display:flex; gap:10px; justify-content:center; margin-top:10px; flex-wrap:wrap;}
   #zoomLinks a{
-    background:var(--gold); color:var(--sea); text-decoration:none; font-weight:600;
-    font-size:13px; padding:8px 14px; border-radius:6px;
+    background:var(--gold); color:#fff; text-decoration:none; font-weight:600;
+    font-size:13px; padding:9px 16px; border-radius:999px;
   }
   #zoomLinks a.alt{background:var(--panel); color:var(--parchment); border:1px solid var(--line);}
   #zoomLinks a:hover{filter:brightness(1.1);}
@@ -239,12 +280,12 @@
   #camGuide{
     position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
     width:min(78vw,440px); height:132px; border:3px solid var(--gold);
-    border-radius:10px; box-shadow:0 0 0 100vmax rgba(5,9,15,.55);
+    border-radius:var(--radius-lg); box-shadow:0 0 0 100vmax rgba(5,9,15,.55);
     display:flex; align-items:flex-end; justify-content:center;
   }
   #camGuideHint{
     background:rgba(5,9,15,.72); color:var(--parchment); font-size:12px;
-    padding:4px 9px; border-radius:6px; margin-bottom:-26px; white-space:nowrap;
+    padding:5px 11px; border-radius:999px; margin-bottom:-26px; white-space:nowrap;
   }
   #camBar{
     background:var(--panel); border-top:1px solid var(--line);
@@ -253,8 +294,8 @@
   #camStatus{color:var(--parchment); font-size:13px; flex:1; min-width:160px;}
   #camBtns{display:flex; gap:8px;}
   #camBar button{
-    background:var(--gold); color:var(--sea); border:none; border-radius:6px;
-    padding:9px 15px; font:inherit; font-weight:600; cursor:pointer;
+    background:var(--gold); color:#fff; border:none; border-radius:999px;
+    padding:10px 18px; font:inherit; font-weight:600; cursor:pointer;
   }
   #camBar button.alt{background:var(--sea); color:var(--parchment); border:1px solid var(--line);}
   #camBar button:hover{filter:brightness(1.08);}
@@ -272,19 +313,19 @@
   }
   #authModal.open{display:flex;}
   #authBox{
-    background:var(--panel); border:1px solid var(--line); border-radius:10px;
-    padding:24px; width:min(360px,100%); display:flex; flex-direction:column; gap:10px;
+    background:var(--panel); border:1px solid var(--line); border-radius:20px;
+    padding:26px; width:min(360px,100%); display:flex; flex-direction:column; gap:10px; box-shadow:0 20px 60px rgba(0,0,0,.5);
   }
-  #authBox h2{font-family:"Pirata One",Georgia,serif; font-weight:400; color:var(--gold); font-size:24px;}
+  #authBox h2{font-family:"IBM Plex Sans",system-ui,sans-serif; font-weight:700; letter-spacing:-.01em; color:var(--gold); font-size:24px;}
   #authBox input{
     background:var(--sea); border:1px solid var(--line); color:var(--parchment);
-    border-radius:6px; padding:10px 12px; font:inherit;
+    border-radius:var(--radius-md); padding:11px 14px; font:inherit;
   }
   #authBox input:focus{outline:2px solid var(--gold); outline-offset:1px;}
   #authBox .row{display:flex; gap:8px;}
   #authBox button{
-    flex:1; background:var(--gold); color:var(--sea); border:none; border-radius:6px;
-    padding:10px; font:inherit; font-weight:600; cursor:pointer;
+    flex:1; background:var(--gold); color:#fff; border:none; border-radius:999px;
+    padding:11px; font:inherit; font-weight:600; cursor:pointer;
   }
   #authBox button.alt{background:var(--sea); color:var(--parchment); border:1px solid var(--line);}
   #authMsg{font-size:12px; color:var(--mute); min-height:16px;}
@@ -303,7 +344,7 @@
 <div id="errBar" role="alert" hidden><span id="errText"></span><button id="errClose" type="button">chiudi</button></div>
 
 <header>
-  <h1 id="homeLink" title="Torna alla scelta del gioco">TCG Tracker</h1>
+  <h1 id="homeLink" title="Torna alla scelta del gioco">Collezionista Matto</h1>
   <button class="hbtn" id="btnOverview">La mia collezione</button>
   <span id="authArea">
     <span id="userMail" hidden></span>
@@ -360,6 +401,7 @@
       <button data-f="owned">Possedute</button>
       <button data-f="missing">Mancanti</button>
       <button data-f="dupes">Doppie (x2+)</button>
+      <button data-f="wish">Desiderate</button>
       <button id="btnScan" type="button">&#128247; Scansiona carta</button>
       <input type="file" id="scanFile" accept="image/*" capture="environment" hidden>
       <span id="searchWrap"><input id="search" type="search"
@@ -375,8 +417,19 @@
     <div id="ovActions">
       <button id="btnExport">Esporta backup (JSON)</button>
       <button id="btnImport">Importa backup</button>
+      <button id="btnStats" type="button">Statistiche</button>
+      <button id="btnWishList" type="button">Copia lista desideri</button>
+      <button id="btnDupeList" type="button">Copia lista doppioni</button>
       <input type="file" id="importFile" accept=".json,application/json" hidden>
     </div>
+    <textarea id="listOut" hidden readonly></textarea>
+  </section>
+
+  <section id="statsView" hidden>
+    <button class="backBtn" id="btnBackStats" type="button">&#8249; Collezione</button>
+    <h2>Statistiche</h2>
+    <div id="statsBody"></div>
+  </section>
   </section>
 
   <p id="status"></p>
@@ -390,7 +443,10 @@
   regolarmente. Per Yu-Gi-Oh! il conteggio &egrave; per ristampa nel set visitato (stessa carta in due set = due voci).
   Scanner: il pulsante &ldquo;Scansiona carta&rdquo; apre la fotocamera dal vivo &ndash; inquadra il codice
   stampato nel riquadro e la carta viene riconosciuta e aggiunta da sola (One Piece: angolo in basso a sinistra,
-  es. OP05-119; Yu-Gi-Oh!: codice sotto l'illustrazione, es. MRD-EN060; Lorcana: riga in basso, es. 12/204 EN 3).
+  es. OP05-119; Yu-Gi-Oh!: codice sotto l'illustrazione, es. MRD-EN060; Lorcana: riga in basso, es. 12/204 EN 3;
+  LEGO: numero di set sulla scatola o sul libretto istruzioni, es. 75192 &ndash; essendo un numero senza lettere
+  che lo identifichino, viene verificato contro il catalogo prima di essere accettato, ma inquadra da vicino solo
+  quel numero per ridurre il rischio di leggere per errore prezzo o et&agrave; consigliata).
   In alternativa &ldquo;Usa una foto&rdquo; per uno scatto singolo. Il motore OCR viene scaricato al primo
   utilizzo; la fotocamera dal vivo richiede una connessione HTTPS (come GitHub Pages).
 </footer>
@@ -423,7 +479,8 @@
 <script>
 "use strict";
 /* ============================================================
-   TCG Tracker - One Piece (probe) / Yu-Gi-Oh! (API) / Lorcana (API)
+   Collezionista Matto - One Piece (probe) / Yu-Gi-Oh! (API) / Lorcana (API) /
+   Magic (API) / LEGO (catalogo pre-scaricato via GitHub Actions, vedi build-lego.py)
    Chiavi collezione:
      One Piece : "OP01-001"            (formato storico, retrocompatibile)
      Yu-Gi-Oh! : "ygo:MRD:46986414"    (set code : passcode)
@@ -470,6 +527,11 @@ const LOR_CARDS_URL = (code) => "https://api.lorcast.com/v0/sets/" + encodeURICo
 // Magic: The Gathering via Scryfall (gratuito, CORS abilitato)
 const MTG_SETS_URL  = "https://api.scryfall.com/sets";
 const MTG_CARDS_URL = (code) => "https://api.scryfall.com/cards/search?order=set&unique=prints&q=" + encodeURIComponent("set:" + code);
+// LEGO: catalogo pre-scaricato da Rebrickable via GitHub Actions (l'API Rebrickable
+// non ha CORS per il browser, vedi build-lego.py). Le "categorie" sono i temi LEGO
+// di primo livello (Star Wars, Technic, City...), i "set" al loro interno.
+const LEGO_CATEGORIES_URL = "lego-categories.json";
+const LEGO_SETS_URL = (catId) => "lego-sets/" + encodeURIComponent(catId) + ".json";
 
 // ---------- Stato ----------
 const $ = (id) => document.getElementById(id);
@@ -501,6 +563,7 @@ let ownedInSet = 0;
 let lorSets = null;              // elenco set Lorcana (da API, con cache)
 let ygoSets = null;              // elenco set Yu-Gi-Oh! (da API, con cache)
 let mtgSets = null;              // elenco set Magic (da API, con cache)
+let legoCats = null;             // elenco categorie LEGO (da JSON pre-scaricato)
 let curYgoSet = null;            // set Yu-Gi-Oh! attualmente aperto
 
 // ---------- Lingua (EN/JP) ----------
@@ -526,9 +589,21 @@ function showView(v){
   $("setsView").hidden = v !== "sets";
   $("setView").hidden = v !== "cards";
   $("overview").hidden = v !== "overview";
+  $("statsView").hidden = v !== "stats";
   $("ygoPicker").style.display = (v === "sets" && game === "ygo") ? "block" : "none";
   statusEl.textContent = "";
   window.scrollTo({top:0});
+}
+
+// ---------- Wishlist (carte desiderate, separate dal posseduto) ----------
+const K_WISH = "optcg_wishlist";
+let WISH = {};  // {card_key: 1}
+function isWished(key){ return !!WISH[key]; }
+function toggleWish(key){
+  if (WISH[key]) delete WISH[key]; else WISH[key] = 1;
+  saveJSON(K_WISH, WISH);
+  cloudWishSet(key, !!WISH[key]);
+  return !!WISH[key];
 }
 
 // ---------- Collezione ----------
@@ -540,6 +615,7 @@ function saveJSON(k, v){
   if (k === K_TOT && typeof scheduleTotalsPush === "function") scheduleTotalsPush();
 }
 let COLL = loadJSON(K_COLL, {});
+WISH = loadJSON(K_WISH, {});
 let TOTALS = loadJSON(K_TOT, {});
 // langFilter: "en" | "jp" | "any" (default: rispetta la lingua attiva se il gioco la usa)
 function makeLangPred(langFilter){
@@ -647,6 +723,7 @@ async function onLogin(){
     const {data: items, error} = await sb.from("collection_items").select("card_key, qty");
     if (error) throw error;
     const {data: st} = await sb.from("user_state").select("totals").maybeSingle();
+    const {data: wishItems} = await sb.from("wishlist_items").select("card_key");
 
     const localKeys = Object.keys(COLL).length;
     if ((!items || items.length === 0) && localKeys > 0){
@@ -659,6 +736,11 @@ async function onLogin(){
       (items || []).forEach(r => { COLL[r.card_key] = r.qty; });
       localStorage.setItem(K_COLL, JSON.stringify(COLL));
       if (st && st.totals) { TOTALS = Object.assign(TOTALS, st.totals); localStorage.setItem(K_TOT, JSON.stringify(TOTALS)); }
+      if (wishItems){
+        WISH = {};
+        wishItems.forEach(r => { WISH[r.card_key] = 1; });
+        localStorage.setItem(K_WISH, JSON.stringify(WISH));
+      }
     }
     setSyncDot("\u2713 sincronizzato");
     // rinfresca la vista corrente
@@ -699,12 +781,35 @@ async function pushAllToCloud(){
     const {error} = await sb.from("collection_items").upsert(rows.slice(i, i + 500));
     if (error){ setSyncDot("\u26A0 errore"); statusEl.textContent = "Errore caricamento: " + error.message; return; }
   }
+  const wrows = Object.keys(WISH).map(k => ({user_id: user.id, card_key: k}));
+  for (let i = 0; i < wrows.length; i += 500){
+    const {error} = await sb.from("wishlist_items").upsert(wrows.slice(i, i + 500));
+    if (error){ statusEl.textContent = "Wishlist non caricata: " + error.message; break; }
+  }
   await pushTotals();
   setSyncDot("\u2713 sincronizzato");
 }
 async function pushTotals(){
   if (!sb || !user) return;
   await sb.from("user_state").upsert({user_id: user.id, totals: TOTALS, updated_at: new Date().toISOString()});
+}
+async function cloudWishSet(key, on){
+  if (!sb || !user) return;
+  setSyncDot("\u21BB");
+  try{
+    if (on){
+      const {error} = await sb.from("wishlist_items").upsert({user_id: user.id, card_key: key});
+      if (error) throw error;
+    } else {
+      const {error} = await sb.from("wishlist_items")
+        .delete().eq("user_id", user.id).eq("card_key", key);
+      if (error) throw error;
+    }
+    setSyncDot("\u2713 sincronizzato");
+  }catch(e){
+    setSyncDot("\u26A0 non sincronizzato");
+    statusEl.textContent = "Desiderata salvata solo in locale (errore rete): " + (e.message || e);
+  }
 }
 function scheduleTotalsPush(){
   if (!sb || !user) return;
@@ -718,7 +823,7 @@ function makeTile(opt){
   const q0 = COLL[opt.key] || 0;
   const fig = document.createElement("figure");
   fig.className = "card" + (opt.extraClass ? " " + opt.extraClass : "") +
-    (q0 >= 1 ? " owned" : "") + (q0 >= 2 ? " dupe" : "");
+    (q0 >= 1 ? " owned" : "") + (q0 >= 2 ? " dupe" : "") + (isWished(opt.key) ? " wished" : "");
   fig.dataset.id = opt.dataId || opt.key;
 
   const img = document.createElement("img");
@@ -746,7 +851,18 @@ function makeTile(opt){
   plus.setAttribute("aria-label", "Aggiungi una copia di " + opt.label);
   minus.addEventListener("click", () => setQty(opt.key, -1, fig, qty));
   plus.addEventListener("click", () => setQty(opt.key, 1, fig, qty));
-  step.appendChild(minus); step.appendChild(qty); step.appendChild(plus);
+  const wish = document.createElement("button");
+  wish.className = "wishBtn" + (isWished(opt.key) ? " on" : "");
+  wish.type = "button";
+  wish.textContent = "\u2605";
+  wish.title = "Aggiungi/rimuovi dai desideri";
+  wish.setAttribute("aria-label", "Desidero " + opt.label);
+  wish.addEventListener("click", () => {
+    const on = toggleWish(opt.key);
+    wish.classList.toggle("on", on);
+    fig.classList.toggle("wished", on);
+  });
+  step.appendChild(minus); step.appendChild(qty); step.appendChild(plus); step.appendChild(wish);
   cap.appendChild(lbl); cap.appendChild(step);
 
   fig.appendChild(img); fig.appendChild(cap);
@@ -783,7 +899,9 @@ const GAMES = [
   {g:"lor", t:"Disney Lorcana", sub:"Tutti i set, dal Primo Capitolo in poi",
    srcs: ["img/cards/lorcana-title.jpg", "img/cards/lorcana-title.png", () => tcgCover("lor", "1"), () => lorCover("1")]},
   {g:"mtg", t:"Magic: The Gathering", sub:"Tutti i set, prezzi \u20AC (Scryfall)",
-   srcs: ["img/cards/magic-title.jpg", "img/cards/magic-title.png", "https://api.scryfall.com/cards/named?exact=Black%20Lotus&format=image&version=art_crop"]}
+   srcs: ["img/cards/magic-title.jpg", "img/cards/magic-title.png", "https://api.scryfall.com/cards/named?exact=Black%20Lotus&format=image&version=art_crop"]},
+  {g:"lego", t:"LEGO", sub:"Tutti i set, divisi per categoria",
+   srcs: ["img/cards/lego-title.jpg", "img/cards/lego-title.png"]}
 ];
 async function lorCover(code){
   try{
@@ -893,7 +1011,8 @@ $("btnBackSets").addEventListener("click", () => navGame(game));
 function enterGame(g){
   try{
     game = g;
-    $("searchWrap").style.display = (game === "op") ? "" : "none";
+    $("searchWrap").style.display = (game === "op" || game === "lego") ? "" : "none";
+    $("search").placeholder = game === "lego" ? "Cerca set LEGO per codice (es. 75192)" : "Vai alla carta (es. OP05-119)";
     refreshLangBars();
     showView("sets");
     const suffix = langAware() && lang === "jp" ? " \u00B7 \ud83c\uddef\ud83c\uddf5 JP" : "";
@@ -901,6 +1020,7 @@ function enterGame(g){
     if (g === "ygo"){ $("setsTitle").textContent = "Yu-Gi-Oh! \u00B7 Set" + suffix; $("setsGrid").innerHTML = ""; initYgo(); }
     if (g === "lor"){ $("setsTitle").textContent = "Disney Lorcana \u00B7 Set"; renderLorSets(); }
     if (g === "mtg"){ $("setsTitle").textContent = "Magic \u00B7 Set"; $("setsGrid").innerHTML = ""; renderMtgSets(); }
+    if (g === "lego"){ $("setsTitle").textContent = "LEGO \u00B7 Categorie"; $("setsGrid").innerHTML = ""; renderLegoCats(); }
   }catch(err){ showErr("apertura gioco " + g + ": " + (err && err.message || err)); }
 }
 
@@ -1080,6 +1200,7 @@ function opProbeDone(){
 // Ricerca per codice carta One Piece
 $("search").addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
+  if (game === "lego"){ searchLegoByCode(e.target.value); return; }
   const raw = e.target.value.trim().toUpperCase().replace(/\s+/g, "");
   const m = raw.match(/^(OP\d{2}|EB\d{2}|PRB\d{2})-?(\d{1,3})$/);
   if (!m){ statusEl.textContent = 'Formato non riconosciuto: usa ad esempio "OP05-119".'; return; }
@@ -1335,6 +1456,14 @@ function matchCard(rawText){
     const printed = mYgo[1] + "-" + region + mYgo[3];
     return {type: "ygo", canon: "ygo:" + printed, setPrefix: mYgo[1], region, detected, printed};
   }
+
+  // LEGO: numero di set nudo (4-6 cifre, es. 75192, a volte con suffisso -1).
+  // Controllato per ultimo perche' meno specifico (nessuna lettera che lo ancori):
+  // il match viene poi verificato contro il catalogo reale prima di essere accettato.
+  const mLego = clean.match(/\b(\d{4,6})(?:-\d{1,2})?\b/);
+  if (mLego){
+    return {type: "lego", canon: "lego:" + mLego[1], code: mLego[1]};
+  }
   return null;
 }
 
@@ -1385,6 +1514,20 @@ async function applyCardMatch(m){
     }
     return;
   }
+  if (m.type === "lego"){
+    statusEl.textContent = "Codice letto: " + m.code + " \u00B7 cerco nel catalogo LEGO\u2026";
+    const found = await findLegoSet(m.code);
+    if (!found){
+      statusEl.textContent = "Codice " + m.code + " non trovato nel catalogo LEGO: potrebbe non essere un numero di " +
+        "set (es. prezzo o et\u00E0 consigliata letti per errore), oppure rientrare in una categoria esclusa dal catalogo.";
+      return;
+    }
+    const key = "lego:" + found.cat.id + ":" + found.entry.n;
+    const q = bumpKey(key);
+    statusEl.textContent = "\u2713 " + found.entry.t + " [" + found.entry.n + "] aggiunto alla collezione (ora x" + q + ")";
+    showLegoCat(found.catIdx, key);
+    return;
+  }
 }
 
 async function handleScannedText(text){
@@ -1392,7 +1535,8 @@ async function handleScannedText(text){
   if (m){ await applyCardMatch(m); return; }
   statusEl.textContent = "Nessun codice riconosciuto. Fotografa da vicino e con buona luce: " +
     "One Piece \u2192 codice in basso a sinistra (OP05-119); Yu-Gi-Oh! \u2192 codice sotto l'illustrazione " +
-    "(MRD-EN060); Lorcana \u2192 tutta la riga in basso a sinistra (12/204 EN 3).";
+    "(MRD-EN060); Lorcana \u2192 tutta la riga in basso a sinistra (12/204 EN 3); LEGO \u2192 il numero di set " +
+    "sulla scatola o sul libretto istruzioni (es. 75192), inquadrando da vicino solo quel numero.";
 }
 
 // ============================================================
@@ -1478,13 +1622,13 @@ async function camLoop(){
     // Stabilita': accetto solo se lo stesso codice compare in 2 letture di fila.
     if (m.canon === camLastCanon && !(m.type === "lor" && !m.setCode)){
       camScan.classList.add("camLock");
-      $("camStatus").textContent = "\u2713 Carta riconosciuta: " + m.canon.replace(/^op:|^ygo:/, "");
+      $("camStatus").textContent = "\u2713 Carta riconosciuta: " + m.canon.replace(/^op:|^ygo:|^lego:/, "");
       const found = m;
       setTimeout(async () => { stopCamScan(); await applyCardMatch(found); }, 350);
       return;
     } else {
       camLastCanon = m.canon;
-      $("camStatus").textContent = "Rilevato " + m.canon.replace(/^op:|^ygo:|^lor:/, "") + "\u2026 tieni fermo";
+      $("camStatus").textContent = "Rilevato " + m.canon.replace(/^op:|^ygo:|^lor:|^lego:/, "") + "\u2026 tieni fermo";
     }
   } else {
     camLastCanon = null;
@@ -1499,10 +1643,11 @@ document.querySelectorAll("#toolbar button").forEach(b => {
   b.addEventListener("click", () => {
     document.querySelectorAll("#toolbar button").forEach(x => x.classList.remove("active"));
     b.classList.add("active");
-    document.body.classList.remove("filter-owned", "filter-missing", "filter-dupes");
+    document.body.classList.remove("filter-owned", "filter-missing", "filter-dupes", "filter-wish");
     if (b.dataset.f === "owned") document.body.classList.add("filter-owned");
     if (b.dataset.f === "missing") document.body.classList.add("filter-missing");
     if (b.dataset.f === "dupes") document.body.classList.add("filter-dupes");
+    if (b.dataset.f === "wish") document.body.classList.add("filter-wish");
   });
 });
 
@@ -1527,6 +1672,58 @@ function ovHeader(rows, text){
   const h = document.createElement("div"); h.className = "ovgame"; h.textContent = text; rows.appendChild(h);
 }
 function hasLangCards(prefix, lf){ return ownedCount(prefix, lf) > 0; }
+
+// ---------- Etichetta leggibile a partire da una chiave carta ----------
+function labelForKey(id){
+  const jp = isJpKey(id) ? " [JP]" : "";
+  const base = id.replace(/~jp$/, "");
+  if (base.startsWith("ygo:")){
+    const [, code, passcode] = base.split(":");
+    return (TOTALS["ygoname:" + code] || code) + " \u2014 carta #" + passcode + jp;
+  }
+  if (base.startsWith("lor:")){
+    const [, code, num] = base.split(":");
+    return (TOTALS["lorname:" + code] || ("Set " + code)) + " \u2014 n." + num;
+  }
+  if (base.startsWith("mtg:")){
+    const [, code, num] = base.split(":");
+    return (TOTALS["mtgname:" + code] || code.toUpperCase()) + " \u2014 n." + num;
+  }
+  if (base.startsWith("lego:")){
+    const [, catId, setNum] = base.split(":");
+    return (TOTALS["legoname:" + catId] || ("Categoria " + catId)) + " \u2014 set " + setNum;
+  }
+  return base + jp;  // One Piece: gia' leggibile cosi' com'e' (es. OP05-119)
+}
+
+// ---------- Esportazione liste testuali (per scambi/desideri) ----------
+function showListOut(text){
+  const el = $("listOut");
+  el.value = text;
+  el.hidden = false;
+  el.focus(); el.select();
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(() => {
+      statusEl.textContent = "Lista copiata negli appunti (e mostrata qui sotto).";
+    }).catch(() => { statusEl.textContent = "Lista pronta qui sotto: selezionala e copiala manualmente."; });
+  } else {
+    statusEl.textContent = "Lista pronta qui sotto: selezionala e copiala manualmente.";
+  }
+}
+$("btnWishList").addEventListener("click", () => {
+  const keys = Object.keys(WISH).sort();
+  if (!keys.length){ statusEl.textContent = "Nessuna carta nei desideri: tocca la stellina \u2605 su una carta per aggiungerla."; return; }
+  const lines = ["La mia lista desideri (" + keys.length + " carte)", ""];
+  keys.forEach(k => lines.push("\u2605 " + labelForKey(k)));
+  showListOut(lines.join("\n"));
+});
+$("btnDupeList").addEventListener("click", () => {
+  const keys = Object.keys(COLL).filter(k => COLL[k] >= 2).sort();
+  if (!keys.length){ statusEl.textContent = "Nessun doppione ancora: le carte con 2+ copie compariranno qui."; return; }
+  const lines = ["Le mie carte scambiabili (" + keys.length + " tipi)", ""];
+  keys.forEach(k => lines.push("x" + COLL[k] + " \u2014 " + labelForKey(k)));
+  showListOut(lines.join("\n"));
+});
 
 function renderOverview(){
   showView("overview");
@@ -1589,6 +1786,17 @@ function renderOverview(){
     [...mtgCodes].sort().forEach(code => {
       const label = TOTALS["mtgname:" + code] || code.toUpperCase();
       grandOwned += ovRow(rows, label, "mtg:" + code + ":", TOTALS["mtg:" + code], () => openMtgByCode(code), "any");
+    });
+  }
+
+  // --- LEGO (solo categorie con set posseduti) ---
+  const legoCodes = new Set();
+  for (const id in COLL) if (id.startsWith("lego:")) legoCodes.add(id.split(":")[1]);
+  if (legoCodes.size){
+    ovHeader(rows, "LEGO");
+    [...legoCodes].sort().forEach(code => {
+      const label = TOTALS["legoname:" + code] || ("Categoria " + code);
+      grandOwned += ovRow(rows, label, "lego:" + code + ":", TOTALS["lego:" + code], () => openLegoByCat(code), "any");
     });
   }
 
@@ -1700,13 +1908,279 @@ async function openMtgByCode(code){
 }
 
 // ============================================================
+// LEGO (catalogo pre-scaricato da Rebrickable, vedi scripts/build-lego.py)
+// ============================================================
+async function renderLegoCats(){
+  const g = $("setsGrid");
+  g.innerHTML = "";
+  if (!legoCats){
+    $("setsTitle").textContent = "LEGO \u00B7 carico le categorie\u2026";
+    try{
+      legoCats = await cachedFetch("legocats", LEGO_CATEGORIES_URL, (j) => j || []);
+    }catch(e){
+      statusEl.textContent = "Catalogo LEGO non ancora generato: vedi GUIDA-INSTALLAZIONE.md " +
+        "per attivare il workflow \u201CAggiorna catalogo LEGO\u201D su GitHub Actions.";
+      $("setsTitle").textContent = "LEGO \u00B7 Categorie";
+      return;
+    }
+    $("setsTitle").textContent = "LEGO \u00B7 " + legoCats.length + " categorie";
+  }
+  if (!legoCats.length){
+    statusEl.textContent = "Catalogo LEGO vuoto: lancia il workflow \u201CAggiorna catalogo LEGO\u201D su GitHub Actions.";
+    return;
+  }
+  legoCats.forEach((c, i) => {
+    const el = setTile(c.n, c.count + " set", [c.img], "lego:" + c.id + ":",
+      TOTALS["lego:" + c.id] || c.count, () => navSet("lego", {i:i}));
+    g.appendChild(el);
+  });
+}
+
+async function fetchLegoSets(catId){
+  const K = K_CACHE + "lego_" + catId;
+  const hit = loadJSON(K, null);
+  if (hit && hit.d && hit.d.length && Date.now() - hit.t < 7 * 86400000) return hit.d;
+  const res = await fetch(LEGO_SETS_URL(catId));
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const data = await res.json();
+  if (Array.isArray(data) && data.length) saveJSON(K, {t: Date.now(), d: data});
+  return data;
+}
+
+async function showLegoCat(i, focusId){
+  const c = legoCats[i];
+  game = "lego";
+  $("searchWrap").style.display = "";
+  $("search").placeholder = "Cerca set LEGO per codice (es. 75192)";
+  showView("cards");
+  refreshLangBars();
+  title.textContent = c.n + " \u00B7 LEGO";
+  countEl.textContent = "Caricamento set\u2026";
+  grid.innerHTML = "";
+  curPrefix = "lego:" + c.id + ":";
+  ownedInSet = ownedCount(curPrefix, "any");
+  let sets;
+  try{ sets = await fetchLegoSets(c.id); }
+  catch(e){
+    countEl.textContent = "";
+    statusEl.textContent = "Errore nel caricare la categoria: il file lego-sets/" + c.id + ".json non \u00E8 ancora sul repository.";
+    return;
+  }
+  TOTALS["lego:" + c.id] = sets.length;
+  TOTALS["legoname:" + c.id] = c.n;
+  saveJSON(K_TOT, TOTALS);
+  sets.forEach(s => {
+    grid.appendChild(makeTile({
+      key: "lego:" + c.id + ":" + s.n,
+      label: s.n + " \u00B7 " + s.t + (s.y ? " (" + s.y + ")" : ""),
+      thumb: s.img, big: s.img,
+      extraClass: "lego",
+      price: s.p ? s.p + " pezzi" : "",
+      links: [
+        {t:"Scheda Rebrickable", u:"https://rebrickable.com/sets/" + s.n + "/"},
+        {t:"Cerca su Bricklink", u:"https://www.bricklink.com/v2/search.page?q=" + encodeURIComponent(s.n), alt:true}
+      ]
+    }));
+  });
+  updateSetCount();
+  if (focusId){
+    setTimeout(() => {
+      const el = grid.querySelector('[data-id="' + focusId + '"]');
+      if (el){
+        el.classList.add("hit");
+        el.scrollIntoView({behavior:"smooth", block:"center"});
+        setTimeout(() => el.classList.remove("hit"), 3500);
+      }
+    }, 400);
+  }
+}
+// Cerca un set LEGO per codice in tutte le categorie del catalogo (con cache
+// locale per categoria gia' visitata). Usata sia dalla ricerca manuale sia
+// dallo scanner, cosi' un codice fotografato viene sempre verificato contro
+// il catalogo reale prima di essere accettato.
+async function findLegoSet(code){
+  if (!legoCats){ try{ await renderLegoCats(); }catch(e){} }
+  if (!legoCats || !legoCats.length) return null;
+  const norm = code.replace(/-\d+$/, "");
+  for (let i = 0; i < legoCats.length; i++){
+    let sets;
+    try{ sets = await fetchLegoSets(legoCats[i].id); }catch(e){ continue; }
+    const hit = sets.find(s => s.n === code || s.n === norm || s.n.replace(/-\d+$/, "") === norm);
+    if (hit) return {catIdx: i, cat: legoCats[i], entry: hit};
+  }
+  return null;
+}
+async function searchLegoByCode(raw){
+  const code = raw.trim();
+  if (!code){ return; }
+  statusEl.textContent = "Cerco il set " + code + "\u2026";
+  const found = await findLegoSet(code);
+  if (!found){
+    if (!legoCats || !legoCats.length){
+      statusEl.textContent = "Catalogo LEGO non disponibile: vedi GUIDA-INSTALLAZIONE.md per attivarlo.";
+    } else {
+      statusEl.textContent = "Set " + code + " non trovato (potrebbe essere in una categoria esclusa dal catalogo, es. bomboniere o parti sfuse).";
+    }
+    return;
+  }
+  showLegoCat(found.catIdx, "lego:" + found.cat.id + ":" + found.entry.n);
+}
+async function openLegoByCat(catId){
+  game = "lego";
+  if (!legoCats){ await renderLegoCats(); }
+  const i = legoCats ? legoCats.findIndex(c => String(c.id) === String(catId)) : -1;
+  if (i >= 0) showLegoCat(i); else enterGame("lego");
+}
+
+// ============================================================
+// STATISTICHE
+// ============================================================
+$("btnStats").addEventListener("click", navStats);
+$("btnBackStats").addEventListener("click", navOverview);
+
+// Aggrega owned/totale per un set di prefissi "gioco:codice:" gia' visti
+function aggregateGamePrefixes(gamePrefix){
+  const codes = new Set();
+  for (const id in COLL) if (id.startsWith(gamePrefix)) codes.add(id.split(":")[1]);
+  for (const k in TOTALS) if (k.startsWith(gamePrefix) && !k.includes("name:")) codes.add(k.split(":")[1]);
+  let owned = 0, total = 0;
+  codes.forEach(code => {
+    owned += ownedCount(gamePrefix + code + ":", "any");
+    total += TOTALS[gamePrefix + code] || 0;
+  });
+  return {owned, total};
+}
+
+// Stima il valore in EUR leggendo i prezzi gia' salvati in cache (Yu-Gi-Oh! e
+// Magic sono gli unici due giochi con prezzo per carta). E' una stima parziale:
+// copre solo i set che sono gia' stati aperti almeno una volta nell'app.
+function computeApproxValue(){
+  let total = 0;
+  const top = [];
+  const scanCache = (prefix, cacheKeyOf, matchField) => {
+    for (const id in COLL){
+      if (!id.startsWith(prefix)) continue;
+      const base = id.replace(/~jp$/, "");
+      const parts = base.split(":");
+      const code = parts[1], cardId = parts[2];
+      const hit = loadJSON(K_CACHE + cacheKeyOf(code), null);
+      if (!hit || !hit.d) continue;
+      const card = hit.d.find(c => String(c[matchField]) === String(cardId));
+      const price = card && card.p ? parseFloat(String(card.p).replace(",", ".")) : NaN;
+      if (!isNaN(price)){
+        const qty = COLL[id] || 1;
+        total += price * qty;
+        top.push({label: labelForKey(id), value: price * qty});
+      }
+    }
+  };
+  scanCache("ygo:", (code) => "ygo_" + code, "id");
+  scanCache("mtg:", (code) => "mtg_" + code, "num");
+  top.sort((a, b) => b.value - a.value);
+  return {total, top: top.slice(0, 5)};
+}
+
+// Pezzi LEGO totali posseduti (stima dalle categorie gia' aperte)
+function computeLegoPieces(){
+  let pieces = 0, sets = 0;
+  for (const id in COLL){
+    if (!id.startsWith("lego:")) continue;
+    const [, catId, setNum] = id.split(":");
+    const hit = loadJSON(K_CACHE + "lego_" + catId, null);
+    if (!hit || !hit.d) continue;
+    const s = hit.d.find(x => String(x.n) === String(setNum));
+    if (s){ pieces += (s.p || 0) * (COLL[id] || 1); sets += COLL[id] || 1; }
+  }
+  return {pieces, sets};
+}
+
+function statBar(rows, label, owned, total){
+  const pct = total ? Math.min(100, Math.round(owned / total * 100)) : 0;
+  const el = document.createElement("div");
+  el.className = "statBar";
+  el.innerHTML =
+    '<span>' + label + '</span>' +
+    '<span class="sbtrack"><span class="sbfill" style="width:' + pct + '%"></span></span>' +
+    '<span>' + owned + (total ? " / " + total : "") + '</span>';
+  rows.appendChild(el);
+}
+
+function renderStats(){
+  showView("stats");
+  const body = $("statsBody");
+  body.innerHTML = "";
+
+  let grandOwned = 0, grandCopies = 0;
+  for (const id in COLL) grandCopies += COLL[id];
+  grandOwned = Object.keys(COLL).length;
+
+  // --- Totali generali ---
+  const b1 = document.createElement("div");
+  b1.className = "statBlock";
+  b1.innerHTML =
+    '<h3>Totali</h3><div class="statGrid">' +
+    '<div><div class="statNum">' + grandOwned + '</div><div class="statLbl">carte/set unici</div></div>' +
+    '<div><div class="statNum">' + grandCopies + '</div><div class="statLbl">copie totali</div></div>' +
+    '<div><div class="statNum">' + Object.keys(WISH).length + '</div><div class="statLbl">nella wishlist</div></div>' +
+    '</div>';
+  body.appendChild(b1);
+
+  // --- Completamento per gioco ---
+  const b2 = document.createElement("div");
+  b2.className = "statBlock";
+  b2.innerHTML = '<h3>Completamento per gioco</h3>';
+  const rows2 = document.createElement("div");
+  let opO = 0, opT = 0;
+  OP_SETS.forEach(s => { opO += ownedCount(s.c + "-", "any"); opT += TOTALS[s.c] || 0; });
+  statBar(rows2, "One Piece", opO, opT);
+  const ygoAgg = aggregateGamePrefixes("ygo:"); statBar(rows2, "Yu-Gi-Oh!", ygoAgg.owned, ygoAgg.total);
+  const lorAgg = aggregateGamePrefixes("lor:"); statBar(rows2, "Lorcana", lorAgg.owned, lorAgg.total);
+  const mtgAgg = aggregateGamePrefixes("mtg:"); statBar(rows2, "Magic", mtgAgg.owned, mtgAgg.total);
+  const legoAgg = aggregateGamePrefixes("lego:"); statBar(rows2, "LEGO", legoAgg.owned, legoAgg.total);
+  b2.appendChild(rows2);
+  body.appendChild(b2);
+
+  // --- Valore stimato (solo Yu-Gi-Oh! e Magic, set gia' visitati) ---
+  const val = computeApproxValue();
+  const b3 = document.createElement("div");
+  b3.className = "statBlock";
+  b3.innerHTML = '<h3>Valore stimato</h3>' +
+    '<div class="statNum">\u2248 ' + val.total.toFixed(2) + ' \u20AC</div>' +
+    '<div class="statLbl">Solo Yu-Gi-Oh! e Magic, e solo per i set gi\u00E0 aperti nell\'app ' +
+    '(i prezzi restano in cache 7 giorni). Non \u00E8 una stima completa della collezione.</div>';
+  if (val.top.length){
+    const ul = document.createElement("ul");
+    ul.className = "toplist";
+    val.top.forEach(t => {
+      const li = document.createElement("li");
+      li.innerHTML = '<span>' + t.label + '</span><span class="tval">' + t.value.toFixed(2) + ' \u20AC</span>';
+      ul.appendChild(li);
+    });
+    b3.appendChild(ul);
+  }
+  body.appendChild(b3);
+
+  // --- Pezzi LEGO (bonus, solo se ha carte LEGO) ---
+  const lp = computeLegoPieces();
+  if (lp.sets > 0){
+    const b4 = document.createElement("div");
+    b4.className = "statBlock";
+    b4.innerHTML = '<h3>LEGO</h3><div class="statGrid">' +
+      '<div><div class="statNum">' + lp.sets + '</div><div class="statLbl">set posseduti</div></div>' +
+      '<div><div class="statNum">' + lp.pieces.toLocaleString("it-IT") + '</div><div class="statLbl">pezzi totali (stima)</div></div>' +
+      '</div>';
+    body.appendChild(b4);
+  }
+}
+
+// ============================================================
 // Backup
 // ============================================================
 $("btnExport").addEventListener("click", () => {
-  const blob = new Blob([JSON.stringify({collection: COLL, totals: TOTALS}, null, 1)], {type:"application/json"});
+  const blob = new Blob([JSON.stringify({collection: COLL, totals: TOTALS, wishlist: WISH}, null, 1)], {type:"application/json"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "tcg-collezione-backup.json";
+  a.download = "collezionista-matto-backup.json";
   a.click();
   URL.revokeObjectURL(a.href);
 });
@@ -1721,7 +2195,8 @@ importFile.addEventListener("change", () => {
       const data = JSON.parse(r.result);
       COLL = data.collection || {};
       TOTALS = Object.assign(TOTALS, data.totals || {});
-      saveJSON(K_COLL, COLL); saveJSON(K_TOT, TOTALS);
+      WISH = data.wishlist || {};
+      saveJSON(K_COLL, COLL); saveJSON(K_TOT, TOTALS); saveJSON(K_WISH, WISH);
       if (sb && user) pushAllToCloud();
       renderOverview();
       statusEl.textContent = "Backup importato correttamente.";
@@ -1756,12 +2231,14 @@ function applySet(g, s){
   if (g === "op") showOp(s.i);
   else if (g === "lor") showLorSet(s.i);
   else if (g === "mtg") showMtgSet(s.i);
+  else if (g === "lego") showLegoCat(s.i, s.focus);
   else if (g === "ygo" && s.set) showYgoSet(s.set);
   else enterGame(g);
 }
 function navHome(){ history.pushState({v:"home"}, "", "#"); renderHome(); }
 function navGame(g){ history.pushState({v:"game", g:g}, "", "#/" + g); enterGame(g); }
 function navOverview(){ history.pushState({v:"overview"}, "", "#/collezione"); renderOverview(); }
+function navStats(){ history.pushState({v:"stats"}, "", "#/statistiche"); renderStats(); }
 function navSet(g, payload){
   const st = Object.assign({v:"set", g:g}, payload);
   history.pushState(st, "", "#/" + g + "/set");
@@ -1772,6 +2249,7 @@ window.addEventListener("popstate", (e) => {
   if (!s || s.v === "home"){ renderHome(); return; }
   if (s.v === "game"){ enterGame(s.g); return; }
   if (s.v === "overview"){ renderOverview(); return; }
+  if (s.v === "stats"){ renderStats(); return; }
   if (s.v === "set"){ applySet(s.g, s); return; }
   renderHome();
 });
@@ -1780,9 +2258,15 @@ window.addEventListener("popstate", (e) => {
 (function initRoute(){
   const h = (location.hash || "").replace(/^#\/?/, "");
   const g = h.split("/")[0];
-  if (["op", "ygo", "lor", "mtg"].includes(g)){
+  if (["op", "ygo", "lor", "mtg", "lego"].includes(g)){
     history.replaceState({v:"game", g:g}, "", "#/" + g);
     enterGame(g);
+  } else if (g === "collezione"){
+    history.replaceState({v:"overview"}, "", "#/collezione");
+    renderOverview();
+  } else if (g === "statistiche"){
+    history.replaceState({v:"stats"}, "", "#/statistiche");
+    renderStats();
   } else {
     history.replaceState({v:"home"}, "", "#");
     renderHome();
