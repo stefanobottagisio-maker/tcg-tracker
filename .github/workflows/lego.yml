@@ -1,0 +1,42 @@
+name: Aggiorna catalogo LEGO
+
+# Scarica l'intero catalogo LEGO da Rebrickable (categorie + set) e lo salva
+# nel repository come JSON. Gira lato server: l'API di Rebrickable non e'
+# raggiungibile dal browser per motivi di CORS, quindi questo passaggio e'
+# necessario (stessa tecnica usata per le copertine dei set TCG).
+on:
+  schedule:
+    - cron: "40 4 * * 0"   # ogni domenica alle 04:40 UTC (il catalogo cambia poco)
+  workflow_dispatch: {}      # pulsante manuale in Actions > Run workflow
+
+permissions:
+  contents: write
+
+jobs:
+  lego:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repository
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Genera il catalogo LEGO
+        env:
+          REBRICKABLE_API_KEY: ${{ secrets.REBRICKABLE_API_KEY }}
+        run: python scripts/build-lego.py
+
+      - name: Commit se ci sono modifiche
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add lego-categories.json lego-sets/
+          if git diff --staged --quiet; then
+            echo "Nessuna modifica al catalogo LEGO."
+          else
+            git commit -m "Aggiorna catalogo LEGO (automatico)"
+            git push
+          fi
