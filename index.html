@@ -298,11 +298,23 @@
     background:rgba(5,9,15,.72); color:var(--parchment); font-size:12px;
     padding:5px 11px; border-radius:999px; margin-bottom:-26px; white-space:nowrap;
   }
+  #camZoom{
+    position:absolute; right:14px; bottom:14px; z-index:2;
+    display:flex; align-items:center; gap:8px;
+    background:rgba(5,9,15,.72); border-radius:999px; padding:5px 8px;
+  }
+  #camZoom button{
+    width:30px; height:30px; border-radius:999px; border:1px solid var(--line);
+    background:var(--panel); color:var(--parchment); font-size:16px; line-height:1; cursor:pointer;
+  }
+  #camZoom button:hover{border-color:var(--gold);}
+  #camZoomLabel{color:var(--parchment); font-size:12px; min-width:32px; text-align:center;}
   #camBar{
     background:var(--panel); border-top:1px solid var(--line);
-    padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    padding:12px 16px; display:flex; align-items:center; gap:6px 12px; flex-wrap:wrap;
   }
   #camStatus{color:var(--parchment); font-size:13px; flex:1; min-width:160px;}
+  #camDiag{color:var(--mute); font-size:11px; width:100%; order:3;}
   #camBtns{display:flex; gap:8px;}
   #camBar button{
     background:var(--gold); color:#fff; border:none; border-radius:999px;
@@ -465,9 +477,15 @@
   <div id="camStage">
     <video id="camVideo" playsinline muted></video>
     <div id="camGuide"><span id="camGuideHint">Inquadra il codice &middot; tocca per mettere a fuoco</span></div>
+    <div id="camZoom" hidden>
+      <button id="camZoomOut" type="button">&#8722;</button>
+      <span id="camZoomLabel">1.0x</span>
+      <button id="camZoomIn" type="button">+</button>
+    </div>
   </div>
   <div id="camBar">
     <span id="camStatus">Avvio fotocamera\u2026</span>
+    <span id="camDiag"></span>
     <div id="camBtns">
       <button id="camPhoto" type="button" class="alt">Usa una foto</button>
       <button id="camClose" type="button">Chiudi</button>
@@ -1651,13 +1669,15 @@ async function handleScannedText(text){
 // ============================================================
 // SCANNER LIVE (fotocamera continua, riconoscimento on-device)
 // ============================================================
-let camStream = null, camActive = false, camLastCanon = null, camCapture = null;
+let camStream = null, camActive = false, camLastCanon = null, camCapture = null, camZoomCaps = null;
 const camVideo = $("camVideo"), camScan = $("camScan");
 
 async function startCamScan(){
   camScan.classList.add("open");
   camScan.classList.remove("camLock");
   $("camStatus").textContent = "Avvio fotocamera\u2026";
+  $("camDiag").textContent = "";
+  $("camZoom").hidden = true;
   camLastCanon = null;
   try{
     camStream = await navigator.mediaDevices.getUserMedia({
@@ -1674,7 +1694,9 @@ async function startCamScan(){
   }
   camVideo.srcObject = camStream;
   await camVideo.play().catch(() => {});
-  await enableAutofocus();
+  await new Promise(r => { if (camVideo.videoWidth) r(); else camVideo.addEventListener("loadedmetadata", r, {once:true}); });
+  const focusMode = await enableAutofocus();
+  await setupZoom();
   // Dove supportato (soprattutto Chrome Android), ImageCapture.grabFrame() legge
   // dal buffer camera a piena qualita', diverso e spesso piu' nitido rispetto
   // al flusso video "live" ottimizzato per una preview fluida a bassa latenza.
@@ -1683,6 +1705,12 @@ async function startCamScan(){
     try{ camCapture = new ImageCapture(camStream.getVideoTracks()[0]); }
     catch(e){ camCapture = null; }
   }
+  // Riga diagnostica: utile per capire, dal messaggio che mi riporti, cosa
+  // supporta davvero il tuo dispositivo invece di doverlo ipotizzare.
+  $("camDiag").textContent = "Risoluzione " + camVideo.videoWidth + "\u00D7" + camVideo.videoHeight +
+    " \u00B7 autofocus " + (focusMode || "non disponibile") +
+    " \u00B7 zoom " + (camZoomCaps ? camZoomCaps.min + "\u2013" + camZoomCaps.max + "x" : "non disponibile") +
+    " \u00B7 cattura " + (camCapture ? "alta qualit\u00E0" : "standard");
   $("camStatus").textContent = "Preparo il motore OCR\u2026";
   try{ await getWorker(); }catch(e){ $("camStatus").textContent = "Motore OCR non caricato: serve connessione."; return; }
   camActive = true;
@@ -1691,21 +1719,60 @@ async function startCamScan(){
 }
 
 // Prova ad attivare la messa a fuoco continua sul sensore, dove il browser lo
-// permette (soprattutto Chrome Android). Se non e' supportato non fa nulla:
-// nessun errore visibile, semplice fallback silenzioso.
+// permette (soprattutto Chrome Android). Torna il nome della modalita' attivata
+// (o null) per la riga diagnostica; se non supportato non fa nulla di rischioso.
 async function enableAutofocus(){
+  try{
+    const track = camStream && camStream.getVideoTracks()[0];
+    if (!track || !track.getCapabilities) return null;
+    const caps = track.getCapabilities();
+    if (caps.focusMode && caps.focusMode.includes("continuous")){
+      await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] });
+      return "continuo";
+    }
+    if (caps.focusMode && caps.focusMode.length) return caps.focusMode[0];
+  }catch(e){ /* non supportato: si prosegue con la messa a fuoco automatica di default */ }
+  return null;
+}
+
+// Rileva lo zoom ottico/digitale della fotocamera (dove esposto dal browser,
+// soprattutto Chrome Android) e mostra i controlli +/-. Parte da un valore
+// leggermente ingrandito cosi' non serve avvicinare troppo il telefono alla
+// carta, cosa che su molte fotocamere supera la distanza minima di messa a
+// fuoco e produce un'immagine irrimediabilmente sfocata.
+async function setupZoom(){
+  camZoomCaps = null;
   try{
     const track = camStream && camStream.getVideoTracks()[0];
     if (!track || !track.getCapabilities) return;
     const caps = track.getCapabilities();
-    if (caps.focusMode && caps.focusMode.includes("continuous")){
-      await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] });
-    }
-  }catch(e){ /* non supportato: si prosegue con la messa a fuoco automatica di default */ }
+    if (!caps.zoom) return;
+    camZoomCaps = {min: caps.zoom.min, max: caps.zoom.max, step: caps.zoom.step || 0.1, track};
+    const start = Math.min(caps.zoom.max, caps.zoom.min + (caps.zoom.max - caps.zoom.min) * 0.25);
+    await applyZoom(start);
+    $("camZoom").hidden = false;
+  }catch(e){ camZoomCaps = null; }
 }
+async function applyZoom(value){
+  if (!camZoomCaps) return;
+  const v = Math.max(camZoomCaps.min, Math.min(camZoomCaps.max, value));
+  try{
+    await camZoomCaps.track.applyConstraints({ advanced: [{ zoom: v }] });
+    camZoomCaps.current = v;
+    $("camZoomLabel").textContent = v.toFixed(1) + "x";
+  }catch(e){ /* costrizione zoom rifiutata: si ignora */ }
+}
+$("camZoomIn").addEventListener("click", () => {
+  if (camZoomCaps) applyZoom((camZoomCaps.current || camZoomCaps.min) + camZoomCaps.step * 4);
+});
+$("camZoomOut").addEventListener("click", () => {
+  if (camZoomCaps) applyZoom((camZoomCaps.current || camZoomCaps.min) - camZoomCaps.step * 4);
+});
+
 // Tocco sullo schermo = richiesta di rimettere a fuoco (utile se l'immagine live
 // e' sfocata: molti telefoni non rifocalizzano da soli su soggetti molto vicini).
-$("camStage").addEventListener("click", async () => {
+$("camStage").addEventListener("click", async (e) => {
+  if (e.target.closest("#camZoom")) return;  // non rubare il tocco ai pulsanti zoom
   try{
     const track = camStream && camStream.getVideoTracks()[0];
     if (!track || !track.getCapabilities) return;
