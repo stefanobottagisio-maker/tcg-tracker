@@ -354,7 +354,7 @@
 <header>
   <h1 id="homeLink" title="Torna alla scelta del gioco">Collezionista Matto</h1>
   <button class="hbtn hbtn-accent" id="btnScanGlobal" type="button">&#128247; Scansiona</button>
-  <button class="hbtn" id="btnOverview">La mia collezione</button>
+  <button class="hbtn" id="btnOverview">&#128194; La mia collezione</button>
   <span id="authArea">
     <span id="userMail" hidden></span>
     <span id="syncDot" hidden></span>
@@ -412,7 +412,7 @@
       <button data-f="dupes">Doppie (x2+)</button>
       <button data-f="wish">Desiderate</button>
       <button id="btnScan" type="button">&#128247; Scansiona carta</button>
-      <input type="file" id="scanFile" accept="image/*" hidden>
+      <input type="file" id="scanFile" accept="image/*" capture="environment" hidden>
       <span id="searchWrap"><input id="search" type="search"
         placeholder="Vai alla carta (es. OP05-119)" aria-label="Cerca carta One Piece per codice"></span>
     </div>
@@ -456,8 +456,11 @@
   l'illustrazione, es. MRD-EN060; Lorcana: riga in basso, es. 12/204 EN 3; LEGO: numero di set sulla scatola o
   sul libretto istruzioni, es. 75192, verificato contro il catalogo prima di essere accettato). Se l'immagine
   risulta sfocata, tocca lo schermo per rimettere a fuoco (dove il telefono lo supporta). In alternativa
-  &ldquo;Usa una foto&rdquo; per uno scatto singolo o una foto dalla galleria. Il motore OCR viene scaricato al
-  primo utilizzo; la fotocamera dal vivo richiede una connessione HTTPS (come GitHub Pages).
+  &ldquo;Usa una foto&rdquo; apre una sessione fotocamera temporanea e prova diversi ritagli mirati sulle fasce
+  dove i produttori stampano il codice, prima di tentare sull'intera foto. Il motore OCR viene scaricato al
+  primo utilizzo; la fotocamera dal vivo richiede una connessione HTTPS (come GitHub Pages). I conteggi delle
+  espansioni One Piece sono verificati automaticamente (vedi GUIDA-INSTALLAZIONE.md), cosi&igrave; restano
+  corretti anche per un set mai aperto.
 </footer>
 
 <div id="camScan" role="dialog" aria-modal="true" aria-label="Scanner fotocamera">
@@ -567,6 +570,7 @@ const grid = $("grid"), title = $("setTitle"),
       countEl = $("setCount"), statusEl = $("status");
 let game = "op";                 // op | ygo | lor
 let opCurrent = null, opLoaded = 0, opProbed = 0, opProbeTotal = 0, opGen = 0;
+const opAuthoritative = new Set();  // codici con totale gia' verificato da op-set-totals.json
 let curPrefix = "";              // prefisso chiavi del set visualizzato
 let ownedInSet = 0;
 let lorSets = null;              // elenco set Lorcana (da API, con cache)
@@ -658,7 +662,13 @@ function setQty(key, delta, fig, out){
 }
 function updateSetCount(){
   const copies = copiesCount(curPrefix);
-  const found = (game === "op") ? opLoaded + " carte trovate" : grid.children.length + " carte";
+  let found;
+  if (game === "op"){
+    const known = opCurrent !== null ? TOTALS[OP_SETS[opCurrent].c] : null;
+    found = known ? opLoaded + " / " + known + " carte" : opLoaded + " carte trovate";
+  } else {
+    found = grid.children.length + " carte";
+  }
   countEl.textContent = found + " \u00B7 " + ownedInSet + " possedute" +
     (copies > ownedInSet ? " (" + copies + " copie)" : "");
 }
@@ -1227,7 +1237,9 @@ function opProbeDone(){
       statusEl.textContent = "Nessuna immagine caricata: controlla la connessione internet e ricarica la pagina.";
     } else {
       const s = OP_SETS[opCurrent];
-      if (TOTALS[s.c] !== opLoaded){ TOTALS[s.c] = opLoaded; saveJSON(K_TOT, TOTALS); }
+      // Non sovrascrivo un totale gia' verificato (op-set-totals.json): il
+      // sondaggio live aggiorna TOTALS solo per i set che non lo hanno ancora.
+      if (!opAuthoritative.has(s.c) && TOTALS[s.c] !== opLoaded){ TOTALS[s.c] = opLoaded; saveJSON(K_TOT, TOTALS); }
     }
   }
 }
@@ -1437,6 +1449,30 @@ function preprocess(drawable, srcW, srcH){
   return cv;
 }
 
+// Ritaglia una regione della foto (in frazioni 0-1 di larghezza/altezza) e la
+// INGRANDISCE fino a targetW: utile per le fasce strette dove i produttori
+// stampano il codice, che nella foto intera sono troppo piccole per l'OCR.
+function preprocessRegion(drawable, srcW, srcH, fx, fy, fw, fh, targetW){
+  const cropW = Math.round(srcW * fw), cropH = Math.round(srcH * fh);
+  const sx = Math.round(srcW * fx), sy = Math.round(srcH * fy);
+  const scale = Math.max(1, targetW / cropW);
+  const cv = document.createElement("canvas");
+  cv.width = Math.round(cropW * scale);
+  cv.height = Math.round(cropH * scale);
+  const ctx = cv.getContext("2d");
+  ctx.drawImage(drawable, sx, sy, cropW, cropH, 0, 0, cv.width, cv.height);
+  const d = ctx.getImageData(0, 0, cv.width, cv.height);
+  const px = d.data;
+  for (let i = 0; i < px.length; i += 4){
+    let g = 0.299 * px[i] + 0.587 * px[i+1] + 0.114 * px[i+2];
+    g = (g - 128) * 1.6 + 128;
+    g = Math.max(0, Math.min(255, g));
+    px[i] = px[i+1] = px[i+2] = g;
+  }
+  ctx.putImageData(d, 0, 0);
+  return cv;
+}
+
 $("btnScan").addEventListener("click", () => startCamScan());
 $("btnScanGlobal").addEventListener("click", () => startCamScan());
 $("scanFile").addEventListener("change", async () => {
@@ -1463,13 +1499,41 @@ $("scanFile").addEventListener("change", async () => {
       drawable = imgEl; srcW = imgEl.naturalWidth; srcH = imgEl.naturalHeight;
     }
     const worker = await getWorker();
-    // Modalita' "testo sparso": una foto intera ha il codice piccolo in mezzo
-    // all'illustrazione, diverso dal ritaglio pulito usato dallo scanner live.
-    await worker.setParameters({ tessedit_pageseg_mode: "11" });
-    statusEl.textContent = "Leggo il codice sulla carta\u2026";
-    const {data} = await worker.recognize(preprocess(drawable, srcW, srcH));
+
+    // Il codice e' quasi sempre stampato in una fascia stretta sul bordo della
+    // carta: provo alcuni ritagli mirati (molto piu' efficaci che leggere la
+    // foto intera, dove il codice e' piccolo in mezzo all'illustrazione) prima
+    // di ripiegare sulla foto intera come ultima spiaggia.
+    const regions = [
+      {fx:0.00, fy:0.84, fw:0.55, fh:0.14},  // basso-sinistra (One Piece, Lorcana)
+      {fx:0.45, fy:0.84, fw:0.55, fh:0.14},  // basso-destra
+      {fx:0.00, fy:0.86, fw:1.00, fh:0.12},  // striscia intera in basso (Yu-Gi-Oh!, righe lunghe)
+    ];
+    let m = null;
+    for (const r of regions){
+      statusEl.textContent = "Leggo il codice sulla carta\u2026";
+      await worker.setParameters({ tessedit_pageseg_mode: "7" });  // riga singola
+      const cv = preprocessRegion(drawable, srcW, srcH, r.fx, r.fy, r.fw, r.fh, 900);
+      const {data} = await worker.recognize(cv);
+      m = matchCard((data.text || "").toUpperCase());
+      if (m) break;
+    }
+    if (!m){
+      statusEl.textContent = "Provo sull'intera foto\u2026";
+      await worker.setParameters({ tessedit_pageseg_mode: "11" });  // testo sparso
+      const {data} = await worker.recognize(preprocess(drawable, srcW, srcH));
+      m = matchCard((data.text || "").toUpperCase());
+    }
     await worker.setParameters({ tessedit_pageseg_mode: "3" });  // ripristino il default per lo scanner live
-    handleScannedText((data.text || "").toUpperCase());
+
+    if (m){
+      await applyCardMatch(m);
+    } else {
+      statusEl.textContent = "Nessun codice riconosciuto. Fotografa da vicino e con buona luce: " +
+        "One Piece \u2192 codice in basso a sinistra (OP05-119); Yu-Gi-Oh! \u2192 codice sotto l'illustrazione " +
+        "(MRD-EN060); Lorcana \u2192 tutta la riga in basso a sinistra (12/204 EN 3); LEGO \u2192 il numero " +
+        "di set sulla scatola o sul libretto istruzioni (es. 75192).";
+    }
   }catch(e){
     statusEl.textContent = "Scansione non riuscita: " + (e.message || e) + ". Serve connessione per il motore OCR.";
   }finally{
@@ -1600,7 +1664,7 @@ async function handleScannedText(text){
 // ============================================================
 // SCANNER LIVE (fotocamera continua, riconoscimento on-device)
 // ============================================================
-let camStream = null, camActive = false, camLastCanon = null;
+let camStream = null, camActive = false, camLastCanon = null, camCapture = null;
 const camVideo = $("camVideo"), camScan = $("camScan");
 
 async function startCamScan(){
@@ -1624,6 +1688,14 @@ async function startCamScan(){
   camVideo.srcObject = camStream;
   await camVideo.play().catch(() => {});
   await enableAutofocus();
+  // Dove supportato (soprattutto Chrome Android), ImageCapture.grabFrame() legge
+  // dal buffer camera a piena qualita', diverso e spesso piu' nitido rispetto
+  // al flusso video "live" ottimizzato per una preview fluida a bassa latenza.
+  camCapture = null;
+  if (window.ImageCapture){
+    try{ camCapture = new ImageCapture(camStream.getVideoTracks()[0]); }
+    catch(e){ camCapture = null; }
+  }
   $("camStatus").textContent = "Preparo il motore OCR\u2026";
   try{ await getWorker(); }catch(e){ $("camStatus").textContent = "Motore OCR non caricato: serve connessione."; return; }
   camActive = true;
@@ -1664,15 +1736,27 @@ function stopCamScan(){
   camScan.classList.remove("open");
   if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
   camVideo.srcObject = null;
+  camCapture = null;
 }
 $("camClose").addEventListener("click", stopCamScan);
 $("camPhoto").addEventListener("click", () => { stopCamScan(); $("scanFile").click(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && camScan.classList.contains("open")) stopCamScan(); });
 
-// Ritaglia dal video la zona del riquadro guida e la pre-elabora per l'OCR
-function grabGuideCanvas(){
-  const vw = camVideo.videoWidth, vh = camVideo.videoHeight;
-  if (!vw || !vh) return null;
+// Ritaglia dal video (o da un frame ImageCapture a piena qualita') la zona
+// del riquadro guida e la pre-elabora per l'OCR
+async function grabGuideCanvas(){
+  let source = null, vw = 0, vh = 0, isBitmap = false;
+  if (camCapture){
+    try{
+      source = await camCapture.grabFrame();
+      vw = source.width; vh = source.height; isBitmap = true;
+    }catch(e){ source = null; }
+  }
+  if (!source){
+    vw = camVideo.videoWidth; vh = camVideo.videoHeight;
+    if (!vw || !vh) return null;
+    source = camVideo;
+  }
   // Il riquadro guida e' centrato: ~78% larghezza, ~132px su altezza schermo.
   // Rapportiamo alla risoluzione reale del video mantenendo una banda centrale.
   const cropW = Math.round(vw * 0.82);
@@ -1684,7 +1768,7 @@ function grabGuideCanvas(){
   cv.width = Math.round(cropW * scale);
   cv.height = Math.round(cropH * scale);
   const ctx = cv.getContext("2d");
-  ctx.drawImage(camVideo, sx, sy, cropW, cropH, 0, 0, cv.width, cv.height);
+  ctx.drawImage(source, sx, sy, cropW, cropH, 0, 0, cv.width, cv.height);
   const d = ctx.getImageData(0, 0, cv.width, cv.height);
   const px = d.data;
   for (let i = 0; i < px.length; i += 4){
@@ -1694,6 +1778,7 @@ function grabGuideCanvas(){
     px[i] = px[i+1] = px[i+2] = g;
   }
   ctx.putImageData(d, 0, 0);
+  if (isBitmap && source.close) source.close();
   return cv;
 }
 
@@ -1701,7 +1786,7 @@ async function camLoop(){
   if (!camActive) return;
   let m = null;
   try{
-    const cv = grabGuideCanvas();
+    const cv = await grabGuideCanvas();
     if (cv){
       const worker = await getWorker();
       const {data} = await worker.recognize(cv);
@@ -2344,6 +2429,37 @@ window.addEventListener("popstate", (e) => {
   if (s.v === "set"){ applySet(s.g, s); return; }
   renderHome();
 });
+
+// Conteggi ufficiali dei set One Piece, pre-calcolati (vedi scripts/build-op-totals.py
+// e il workflow "Aggiorna conteggi set One Piece"). Sopperiscono al sondaggio live,
+// cosi' i numeri sono corretti anche nella griglia delle espansioni, prima ancora
+// di aver aperto un singolo set.
+async function loadOpTotals(){
+  const K = K_CACHE + "op_totals_file";
+  const hit = loadJSON(K, null);
+  let data = (hit && hit.d && Date.now() - hit.t < 86400000) ? hit.d : null;
+  if (!data){
+    try{
+      const res = await fetch("op-set-totals.json?v=" + Date.now());
+      if (res.ok){
+        data = await res.json();
+        if (data && Object.keys(data).length) saveJSON(K, {t: Date.now(), d: data});
+      }
+    }catch(e){ /* file assente o nessuna connessione: si continua col sondaggio live */ }
+  }
+  if (data){
+    let changed = false;
+    for (const code in data){
+      opAuthoritative.add(code);
+      if (TOTALS[code] !== data[code]){ TOTALS[code] = data[code]; changed = true; }
+    }
+    if (changed){
+      saveJSON(K_TOT, TOTALS);
+      if (game === "op" && !$("setsView").hidden) renderOpSets();
+    }
+  }
+}
+loadOpTotals();
 
 // ---------- Avvio (con deep-link dall'URL) ----------
 (function initRoute(){
