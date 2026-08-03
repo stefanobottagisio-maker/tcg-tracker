@@ -48,6 +48,8 @@
     border-radius:999px; padding:8px 16px; font:inherit; font-size:13px; cursor:pointer; transition:border-color .15s, background .15s;
   }
   .hbtn:hover{border-color:var(--gold); background:var(--panel2);}
+  .hbtn-accent{background:var(--gold); border-color:var(--gold); color:#fff; font-weight:600;}
+  .hbtn-accent:hover{background:var(--wax); border-color:var(--wax); color:#fff;}
 
   /* Home: hero della landing */
   #homeHero{max-width:500px; margin:34px auto 0; text-align:center;}
@@ -345,6 +347,7 @@
 
 <header>
   <h1 id="homeLink" title="Torna alla scelta del gioco">Collezionista Matto</h1>
+  <button class="hbtn hbtn-accent" id="btnScanGlobal" type="button">&#128247; Scansiona</button>
   <button class="hbtn" id="btnOverview">La mia collezione</button>
   <span id="authArea">
     <span id="userMail" hidden></span>
@@ -403,7 +406,7 @@
       <button data-f="dupes">Doppie (x2+)</button>
       <button data-f="wish">Desiderate</button>
       <button id="btnScan" type="button">&#128247; Scansiona carta</button>
-      <input type="file" id="scanFile" accept="image/*" capture="environment" hidden>
+      <input type="file" id="scanFile" accept="image/*" hidden>
       <span id="searchWrap"><input id="search" type="search"
         placeholder="Vai alla carta (es. OP05-119)" aria-label="Cerca carta One Piece per codice"></span>
     </div>
@@ -441,20 +444,20 @@
   immagini e set non ancora visitati; gli elenchi carte di Yu-Gi-Oh! e Lorcana vengono salvati in locale dopo la
   prima visita. La collezione &egrave; salvata nella memoria del browser: usa &ldquo;Esporta backup&rdquo;
   regolarmente. Per Yu-Gi-Oh! il conteggio &egrave; per ristampa nel set visitato (stessa carta in due set = due voci).
-  Scanner: il pulsante &ldquo;Scansiona carta&rdquo; apre la fotocamera dal vivo &ndash; inquadra il codice
-  stampato nel riquadro e la carta viene riconosciuta e aggiunta da sola (One Piece: angolo in basso a sinistra,
-  es. OP05-119; Yu-Gi-Oh!: codice sotto l'illustrazione, es. MRD-EN060; Lorcana: riga in basso, es. 12/204 EN 3;
-  LEGO: numero di set sulla scatola o sul libretto istruzioni, es. 75192 &ndash; essendo un numero senza lettere
-  che lo identifichino, viene verificato contro il catalogo prima di essere accettato, ma inquadra da vicino solo
-  quel numero per ridurre il rischio di leggere per errore prezzo o et&agrave; consigliata).
-  In alternativa &ldquo;Usa una foto&rdquo; per uno scatto singolo. Il motore OCR viene scaricato al primo
-  utilizzo; la fotocamera dal vivo richiede una connessione HTTPS (come GitHub Pages).
+  Scanner: il pulsante &ldquo;Scansiona&rdquo; in alto (raggiungibile da qualunque schermata, non solo
+  dentro un set) apre la fotocamera dal vivo &ndash; inquadra il codice stampato nel riquadro e la carta viene
+  riconosciuta e aggiunta da sola (One Piece: angolo in basso a sinistra, es. OP05-119; Yu-Gi-Oh!: codice sotto
+  l'illustrazione, es. MRD-EN060; Lorcana: riga in basso, es. 12/204 EN 3; LEGO: numero di set sulla scatola o
+  sul libretto istruzioni, es. 75192, verificato contro il catalogo prima di essere accettato). Se l'immagine
+  risulta sfocata, tocca lo schermo per rimettere a fuoco (dove il telefono lo supporta). In alternativa
+  &ldquo;Usa una foto&rdquo; per uno scatto singolo o una foto dalla galleria. Il motore OCR viene scaricato al
+  primo utilizzo; la fotocamera dal vivo richiede una connessione HTTPS (come GitHub Pages).
 </footer>
 
 <div id="camScan" role="dialog" aria-modal="true" aria-label="Scanner fotocamera">
   <div id="camStage">
     <video id="camVideo" playsinline muted></video>
-    <div id="camGuide"><span id="camGuideHint">Inquadra il codice della carta nel riquadro</span></div>
+    <div id="camGuide"><span id="camGuideHint">Inquadra il codice &middot; tocca per mettere a fuoco</span></div>
   </div>
   <div id="camBar">
     <span id="camStatus">Avvio fotocamera\u2026</span>
@@ -1379,15 +1382,17 @@ async function getWorker(){
   return tessWorker;
 }
 
-// Pre-elaborazione: ridimensiona, scala di grigi, aumenta contrasto
-function preprocess(imgEl){
+// Pre-elaborazione: ridimensiona, scala di grigi, aumenta contrasto.
+// Accetta sia <img> che ImageBitmap (drawImage funziona con entrambi),
+// per questo le dimensioni sorgente vengono passate esplicitamente.
+function preprocess(drawable, srcW, srcH){
   const maxDim = 1600;
-  const scale = Math.min(1, maxDim / Math.max(imgEl.naturalWidth, imgEl.naturalHeight)) || 1;
+  const scale = Math.min(1, maxDim / Math.max(srcW, srcH)) || 1;
   const cv = document.createElement("canvas");
-  cv.width = Math.round(imgEl.naturalWidth * scale);
-  cv.height = Math.round(imgEl.naturalHeight * scale);
+  cv.width = Math.round(srcW * scale);
+  cv.height = Math.round(srcH * scale);
   const ctx = cv.getContext("2d");
-  ctx.drawImage(imgEl, 0, 0, cv.width, cv.height);
+  ctx.drawImage(drawable, 0, 0, cv.width, cv.height);
   const d = ctx.getImageData(0, 0, cv.width, cv.height);
   const px = d.data;
   for (let i = 0; i < px.length; i += 4){
@@ -1401,22 +1406,43 @@ function preprocess(imgEl){
 }
 
 $("btnScan").addEventListener("click", () => startCamScan());
+$("btnScanGlobal").addEventListener("click", () => startCamScan());
 $("scanFile").addEventListener("change", async () => {
   const f = $("scanFile").files[0];
   $("scanFile").value = "";
   if (!f) return;
-  const url = URL.createObjectURL(f);
-  const imgEl = new Image();
+  statusEl.textContent = "Elaboro la foto\u2026";
+  let bitmap = null, url = null;
   try{
-    await new Promise((ok, ko) => { imgEl.onload = ok; imgEl.onerror = ko; imgEl.src = url; });
+    // createImageBitmap gestisce meglio l'orientamento EXIF (foto verticali da
+    // smartphone) e la decodifica dei formati fotocamera rispetto a un <img>
+    // semplice; dove non e' supportato, si ripiega su <img> come prima.
+    if (window.createImageBitmap){
+      try{ bitmap = await createImageBitmap(f, { imageOrientation: "from-image" }); }
+      catch(e){ /* alcuni browser/formati non sono supportati: si ripiega su <img> sotto */ }
+    }
+    let drawable, srcW, srcH;
+    if (bitmap){
+      drawable = bitmap; srcW = bitmap.width; srcH = bitmap.height;
+    } else {
+      url = URL.createObjectURL(f);
+      const imgEl = new Image();
+      await new Promise((ok, ko) => { imgEl.onload = ok; imgEl.onerror = ko; imgEl.src = url; });
+      drawable = imgEl; srcW = imgEl.naturalWidth; srcH = imgEl.naturalHeight;
+    }
     const worker = await getWorker();
+    // Modalita' "testo sparso": una foto intera ha il codice piccolo in mezzo
+    // all'illustrazione, diverso dal ritaglio pulito usato dallo scanner live.
+    await worker.setParameters({ tessedit_pageseg_mode: "11" });
     statusEl.textContent = "Leggo il codice sulla carta\u2026";
-    const {data} = await worker.recognize(preprocess(imgEl));
+    const {data} = await worker.recognize(preprocess(drawable, srcW, srcH));
+    await worker.setParameters({ tessedit_pageseg_mode: "3" });  // ripristino il default per lo scanner live
     handleScannedText((data.text || "").toUpperCase());
   }catch(e){
-    statusEl.textContent = "Scansione non riuscita: " + e.message + ". Serve connessione per il motore OCR.";
+    statusEl.textContent = "Scansione non riuscita: " + (e.message || e) + ". Serve connessione per il motore OCR.";
   }finally{
-    URL.revokeObjectURL(url);
+    if (bitmap && bitmap.close) bitmap.close();
+    if (url) URL.revokeObjectURL(url);
   }
 });
 
@@ -1552,7 +1578,11 @@ async function startCamScan(){
   camLastCanon = null;
   try{
     camStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } }, audio: false
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1920 }, height: { ideal: 1080 }
+      },
+      audio: false
     });
   }catch(e){
     $("camStatus").textContent = "Fotocamera non disponibile (" + (e.name || e.message) +
@@ -1561,12 +1591,41 @@ async function startCamScan(){
   }
   camVideo.srcObject = camStream;
   await camVideo.play().catch(() => {});
+  await enableAutofocus();
   $("camStatus").textContent = "Preparo il motore OCR\u2026";
   try{ await getWorker(); }catch(e){ $("camStatus").textContent = "Motore OCR non caricato: serve connessione."; return; }
   camActive = true;
-  $("camStatus").textContent = "Inquadra il codice della carta\u2026";
+  $("camStatus").textContent = "Inquadra il codice della carta (tocca lo schermo se sfuocato)\u2026";
   camLoop();
 }
+
+// Prova ad attivare la messa a fuoco continua sul sensore, dove il browser lo
+// permette (soprattutto Chrome Android). Se non e' supportato non fa nulla:
+// nessun errore visibile, semplice fallback silenzioso.
+async function enableAutofocus(){
+  try{
+    const track = camStream && camStream.getVideoTracks()[0];
+    if (!track || !track.getCapabilities) return;
+    const caps = track.getCapabilities();
+    if (caps.focusMode && caps.focusMode.includes("continuous")){
+      await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] });
+    }
+  }catch(e){ /* non supportato: si prosegue con la messa a fuoco automatica di default */ }
+}
+// Tocco sullo schermo = richiesta di rimettere a fuoco (utile se l'immagine live
+// e' sfocata: molti telefoni non rifocalizzano da soli su soggetti molto vicini).
+$("camStage").addEventListener("click", async () => {
+  try{
+    const track = camStream && camStream.getVideoTracks()[0];
+    if (!track || !track.getCapabilities) return;
+    const caps = track.getCapabilities();
+    if (caps.focusMode && caps.focusMode.includes("single-shot")){
+      await track.applyConstraints({ advanced: [{ focusMode: "single-shot" }] });
+      $("camGuideHint").textContent = "Rimessa a fuoco\u2026";
+      setTimeout(() => { $("camGuideHint").textContent = "Inquadra il codice \u00B7 tocca per mettere a fuoco"; }, 1200);
+    }
+  }catch(e){ /* non supportato su questo browser/dispositivo */ }
+});
 
 function stopCamScan(){
   camActive = false;
@@ -1588,7 +1647,7 @@ function grabGuideCanvas(){
   const cropH = Math.round(vh * 0.24);
   const sx = Math.round((vw - cropW) / 2);
   const sy = Math.round((vh - cropH) / 2);
-  const scale = Math.min(1, 1000 / cropW);
+  const scale = Math.min(1, 1400 / cropW);
   const cv = document.createElement("canvas");
   cv.width = Math.round(cropW * scale);
   cv.height = Math.round(cropH * scale);
