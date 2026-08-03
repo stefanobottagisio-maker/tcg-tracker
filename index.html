@@ -201,11 +201,27 @@
   }
 
   /* Pannello collezione */
-  #overview h2, .ovgame{
+  #overview h2{
     font-family:"IBM Plex Sans",system-ui,sans-serif; font-weight:700; letter-spacing:-.01em;
     font-size:clamp(20px,3vw,28px); margin:6px 0 4px;
   }
-  .ovgame{margin-top:22px; color:var(--gold); border-bottom:1px solid var(--line); padding-bottom:4px;}
+  .ovsection{margin-top:14px;}
+  .ovgame{
+    font-family:"IBM Plex Sans",system-ui,sans-serif; font-weight:700; letter-spacing:-.01em;
+    font-size:clamp(17px,2.4vw,22px); color:var(--gold);
+    background:none; border:none; border-bottom:1px solid var(--line);
+    width:100%; text-align:left; padding:8px 2px; margin:0;
+    display:flex; align-items:center; gap:8px; cursor:pointer; font:inherit;
+  }
+  .ovgame:hover{color:var(--wax);}
+  .ovchev{
+    display:inline-block; font-size:13px; color:var(--mute);
+    transition:transform .15s; flex:0 0 auto;
+  }
+  .ovsection.collapsed .ovchev{transform:rotate(-90deg);}
+  .ovsectionBody{overflow:hidden;}
+  .ovsection.collapsed .ovsectionBody{display:none;}
+  .ovsectionCount{margin-left:auto; color:var(--mute); font-size:12px; font-weight:500;}
   #ovTotal{color:var(--mute); font-size:13px; margin-bottom:8px;}
   .ovrow{
     display:grid; grid-template-columns:minmax(64px,150px) 1fr 100px; gap:10px; align-items:center;
@@ -281,6 +297,13 @@
   #zoomPrice{display:block; margin-top:8px; color:var(--gold); font-size:13px;}
 
   #status{color:var(--mute); font-size:13px; padding:8px 0;}
+  #status.busy{color:var(--parchment);}
+  #status.busy::after{
+    content:""; display:inline-block; width:8px; height:8px; margin-left:8px;
+    border-radius:50%; background:var(--gold); vertical-align:middle;
+    animation:statusPulse 1s ease-in-out infinite;
+  }
+  @keyframes statusPulse{ 0%,100%{opacity:.25;} 50%{opacity:1;} }
 
   /* Area utente e login */
   #authArea{display:flex; align-items:center; gap:8px; margin-left:auto;}
@@ -1423,18 +1446,26 @@ function preprocessRegion(drawable, srcW, srcH, fx, fy, fw, fh, targetW){
   return cv;
 }
 
+let scanGen = 0;  // invalida risposte tardive se l'utente avvia un'altra scansione nel frattempo
+function timeoutAfter(ms){
+  return new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms));
+}
+
 $("btnScan").addEventListener("click", () => $("scanFile").click());
 $("btnScanGlobal").addEventListener("click", () => $("scanFile").click());
 $("scanFile").addEventListener("change", async () => {
   const f = $("scanFile").files[0];
   $("scanFile").value = "";
   if (!f) return;
-  statusEl.textContent = "Elaboro la foto\u2026";
-  let bitmap = null, url = null;
-  try{
-    // createImageBitmap gestisce meglio l'orientamento EXIF (foto verticali da
-    // smartphone) e la decodifica dei formati fotocamera rispetto a un <img>
-    // semplice; dove non e' supportato, si ripiega su <img> come prima.
+  const myGen = ++scanGen;
+  const setStatus = (txt) => { if (myGen === scanGen) statusEl.textContent = txt; };
+  statusEl.classList.add("busy");
+  setStatus("Foto ricevuta \u2014 analisi in corso, pu\u00F2 richiedere qualche secondo\u2026");
+
+  const RECOGNIZE_TIMEOUT_MS = 25000;
+  let bitmap = null, url = null, timedOut = false;
+
+  async function runRecognition(){
     if (window.createImageBitmap){
       try{ bitmap = await createImageBitmap(f, { imageOrientation: "from-image" }); }
       catch(e){ /* alcuni browser/formati non sono supportati: si ripiega su <img> sotto */ }
@@ -1452,43 +1483,68 @@ $("scanFile").addEventListener("change", async () => {
 
     // Il codice e' quasi sempre stampato in una fascia stretta sul bordo della
     // carta: provo alcuni ritagli mirati (molto piu' efficaci che leggere la
-    // foto intera, dove il codice e' piccolo in mezzo all'illustrazione) prima
-    // di ripiegare sulla foto intera come ultima spiaggia.
+    // foto intera, dove il codice e' piccolo in mezzo all'illustrazione).
     const regions = [
       {fx:0.00, fy:0.84, fw:0.55, fh:0.14},  // basso-sinistra (One Piece, Lorcana)
       {fx:0.45, fy:0.84, fw:0.55, fh:0.14},  // basso-destra
       {fx:0.00, fy:0.86, fw:1.00, fh:0.12},  // striscia intera in basso (Yu-Gi-Oh!, righe lunghe)
     ];
+    const texts = [];
     let m = null;
-    for (const r of regions){
-      statusEl.textContent = "Leggo il codice sulla carta\u2026";
+
+    // Primo giro: SOLO pattern sicuri (OP/Yu-Gi-Oh!/Lorcana, hanno lettere che
+    // li ancorano). Provo tutti i ritagli prima di considerare il fallback LEGO,
+    // cosi' un ritaglio rumoroso non puo' scavalcare il codice vero letto
+    // correttamente in un ritaglio successivo.
+    for (let i = 0; i < regions.length; i++){
+      setStatus("Leggo il codice sulla carta (tentativo " + (i + 1) + " di " + (regions.length + 1) + ")\u2026");
       await worker.setParameters({ tessedit_pageseg_mode: "7" });  // riga singola
-      const cv = preprocessRegion(drawable, srcW, srcH, r.fx, r.fy, r.fw, r.fh, 900);
+      const cv = preprocessRegion(drawable, srcW, srcH, regions[i].fx, regions[i].fy, regions[i].fw, regions[i].fh, 900);
       const {data} = await worker.recognize(cv);
-      m = matchCard((data.text || "").toUpperCase());
+      const t = (data.text || "").toUpperCase();
+      texts.push(t);
+      m = matchConfident(t);
       if (m) break;
     }
     if (!m){
-      statusEl.textContent = "Provo sull'intera foto\u2026";
+      setStatus("Analizzo l'intera foto (tentativo " + (regions.length + 1) + " di " + (regions.length + 1) + ")\u2026");
       await worker.setParameters({ tessedit_pageseg_mode: "11" });  // testo sparso
       const {data} = await worker.recognize(preprocess(drawable, srcW, srcH));
-      m = matchCard((data.text || "").toUpperCase());
+      const t = (data.text || "").toUpperCase();
+      texts.push(t);
+      m = matchConfident(t);
     }
+    // Il fallback "a rischio" (numero LEGO nudo) si prova solo ora, su tutti i
+    // testi gia' letti, e solo se nessun pattern sicuro e' stato trovato.
+    if (!m){
+      for (const t of texts){ m = matchLego(t); if (m) break; }
+    }
+    return m;
+  }
 
+  try{
+    const m = await Promise.race([ runRecognition(), timeoutAfter(RECOGNIZE_TIMEOUT_MS) ]);
+    if (myGen !== scanGen) return;  // l'utente ha gia' avviato un'altra scansione: ignoro questo risultato
     if (m){
       await applyCardMatch(m);
     } else {
-      statusEl.textContent = "Nessun codice riconosciuto. Fotografa da vicino e con buona luce: " +
+      setStatus("Nessuna corrispondenza trovata dopo l'analisi. Fotografa da vicino e con buona luce: " +
         "One Piece \u2192 codice in basso a sinistra (OP05-119); Yu-Gi-Oh! \u2192 codice sotto l'illustrazione " +
         "(MRD-EN060); Lorcana \u2192 tutta la riga in basso a sinistra (12/204 EN 3); LEGO \u2192 il numero " +
-        "di set sulla scatola o sul libretto istruzioni (es. 75192).";
+        "di set sulla scatola o sul libretto istruzioni (es. 75192).");
     }
   }catch(e){
-    statusEl.textContent = "Scansione non riuscita: " + (e.message || e) + ". Serve connessione per il motore OCR.";
+    timedOut = (e && e.message === "timeout");
+    if (myGen === scanGen){
+      statusEl.textContent = timedOut
+        ? "Analisi troppo lenta, interrotta dopo " + Math.round(RECOGNIZE_TIMEOUT_MS/1000) + " secondi. Riprova con una foto piu\u2019 nitida o con meno luce riflessa."
+        : "Scansione non riuscita: " + (e.message || e) + ". Serve connessione per il motore OCR.";
+    }
   }finally{
     if (bitmap && bitmap.close) bitmap.close();
     if (url) URL.revokeObjectURL(url);
-    await resetWorker();  // motore pulito per il prossimo scatto, riuscito o no
+    if (myGen === scanGen) statusEl.classList.remove("busy");
+    await resetWorker();  // motore pulito per il prossimo scatto: obbligatorio dopo un timeout, utile comunque
   }
 });
 
@@ -1500,7 +1556,9 @@ function bumpKey(key){
 }
 
 // --- Rilevamento PURO (nessun effetto): torna {type, canon, ...} o null ---
-function matchCard(rawText){
+// Pattern "sicuri": hanno lettere che li ancorano, rischio di falso positivo
+// molto basso anche su OCR imperfetto.
+function matchConfident(rawText){
   const clean = (rawText || "").toUpperCase().replace(/[\u2013\u2014]/g, "-");
 
   const mOp = clean.match(/\b(OP|EB|PRB)\s?(\d{2})\s?-\s?(\d{3})\b/);
@@ -1528,15 +1586,25 @@ function matchCard(rawText){
     const printed = mYgo[1] + "-" + region + mYgo[3];
     return {type: "ygo", canon: "ygo:" + printed, setPrefix: mYgo[1], region, detected, printed};
   }
-
-  // LEGO: numero di set nudo (4-6 cifre, es. 75192, a volte con suffisso -1).
-  // Controllato per ultimo perche' meno specifico (nessuna lettera che lo ancori):
-  // il match viene poi verificato contro il catalogo reale prima di essere accettato.
-  const mLego = clean.match(/\b(\d{4,6})(?:-\d{1,2})?\b/);
-  if (mLego){
-    return {type: "lego", canon: "lego:" + mLego[1], code: mLego[1]};
-  }
   return null;
+}
+
+// Pattern "a rischio": un numero nudo senza lettere che lo ancorino, quindi
+// un OCR rumoroso puo' produrne uno per caso. Va provato SOLO come ultima
+// spiaggia, dopo aver verificato matchConfident su ogni tentativo disponibile
+// (altrimenti un rumore letto per primo puo' scavalcare il codice vero letto
+// correttamente in un tentativo successivo - il bug osservato su OP09-020,
+// scambiata per il set LEGO 40008).
+function matchLego(rawText){
+  const clean = (rawText || "").toUpperCase().replace(/[\u2013\u2014]/g, "-");
+  const mLego = clean.match(/\b(\d{4,6})(?:-\d{1,2})?\b/);
+  if (mLego) return {type: "lego", canon: "lego:" + mLego[1], code: mLego[1]};
+  return null;
+}
+
+// Compatibilita': prova prima i pattern sicuri, poi quello a rischio.
+function matchCard(rawText){
+  return matchConfident(rawText) || matchLego(rawText);
 }
 
 // --- Azione a partire da un match (effetti: aggiunge, redirige, aggiorna status) ---
@@ -1602,15 +1670,6 @@ async function applyCardMatch(m){
   }
 }
 
-async function handleScannedText(text){
-  const m = matchCard(text);
-  if (m){ await applyCardMatch(m); return; }
-  statusEl.textContent = "Nessun codice riconosciuto. Fotografa da vicino e con buona luce: " +
-    "One Piece \u2192 codice in basso a sinistra (OP05-119); Yu-Gi-Oh! \u2192 codice sotto l'illustrazione " +
-    "(MRD-EN060); Lorcana \u2192 tutta la riga in basso a sinistra (12/204 EN 3); LEGO \u2192 il numero di set " +
-    "sulla scatola o sul libretto istruzioni (es. 75192), inquadrando da vicino solo quel numero.";
-}
-
 
 // ============================================================
 // Filtri
@@ -1644,8 +1703,23 @@ function ovRow(rows, label, prefix, tot, onClick, langFilter){
   rows.appendChild(row);
   return own;
 }
-function ovHeader(rows, text){
-  const h = document.createElement("div"); h.className = "ovgame"; h.textContent = text; rows.appendChild(h);
+// Crea una sezione collassabile: intestazione cliccabile (con chevron) +
+// corpo che contiene le righe. Le chiamate a ovRow vanno fatte sul CONTENITORE
+// restituito (non piu' su "rows" direttamente), cosi' restano dentro la sezione.
+function ovSection(rows, text){
+  const wrap = document.createElement("div");
+  wrap.className = "ovsection";
+  const head = document.createElement("button");
+  head.type = "button";
+  head.className = "ovgame";
+  head.innerHTML = '<span class="ovchev">\u25BE</span><span>' + text + '</span>';
+  const body = document.createElement("div");
+  body.className = "ovsectionBody";
+  head.addEventListener("click", () => wrap.classList.toggle("collapsed"));
+  wrap.appendChild(head);
+  wrap.appendChild(body);
+  rows.appendChild(wrap);
+  return body;
 }
 function hasLangCards(prefix, lf){ return ownedCount(prefix, lf) > 0; }
 
@@ -1710,12 +1784,12 @@ function renderOverview(){
 
   // --- One Piece: sezione EN sempre, JP solo se ha carte ---
   const opEnabled = [["en", "Inglese \ud83c\uddec\ud83c\udde7"], ["jp", "Giapponese \ud83c\uddef\ud83c\uddf5"]];
-  opEnabled.forEach(([lf, lbl], idx) => {
+  opEnabled.forEach(([lf, lbl]) => {
     const anyOp = OP_SETS.some(s => hasLangCards(s.c + "-", lf));
     if (lf === "jp" && !anyOp) return;             // niente sezione JP vuota
-    ovHeader(rows, "One Piece \u2013 " + lbl);
+    const body = ovSection(rows, "One Piece \u2013 " + lbl);
     OP_SETS.forEach((s, i) => {
-      grandOwned += ovRow(rows, s.c, s.c + "-", TOTALS[s.c],
+      grandOwned += ovRow(body, s.c, s.c + "-", TOTALS[s.c],
         () => { lang = lf; localStorage.setItem("tcg_lang", lf); showOp(i); }, lf);
     });
   });
@@ -1730,10 +1804,10 @@ function renderOverview(){
       codes.add(id.split(":")[1]);
     }
     if (codes.size === 0) return;
-    ovHeader(rows, "Yu-Gi-Oh! \u2013 " + (lf === "jp" ? "Giapponese \ud83c\uddef\ud83c\uddf5" : "Inglese \ud83c\uddec\ud83c\udde7"));
+    const body = ovSection(rows, "Yu-Gi-Oh! \u2013 " + (lf === "jp" ? "Giapponese \ud83c\uddef\ud83c\uddf5" : "Inglese \ud83c\uddec\ud83c\udde7"));
     [...codes].sort().forEach(code => {
       const label = TOTALS["ygoname:" + code] || code;
-      grandOwned += ovRow(rows, label, "ygo:" + code + ":", TOTALS["ygo:" + code],
+      grandOwned += ovRow(body, label, "ygo:" + code + ":", TOTALS["ygo:" + code],
         () => { lang = lf; localStorage.setItem("tcg_lang", lf); enterGame("ygo"); }, lf);
     });
   });
@@ -1742,15 +1816,15 @@ function renderOverview(){
   const lorCodes = new Set();
   for (const id in COLL) if (id.startsWith("lor:")) lorCodes.add(id.split(":")[1]);
   for (const k in TOTALS) if (k.startsWith("lor:")) lorCodes.add(k.slice(4));
-  ovHeader(rows, "Lorcana");
+  const lorBody = ovSection(rows, "Lorcana");
   if (lorCodes.size === 0){
     const p = document.createElement("p"); p.className = "ovempty";
     p.textContent = "Nessuna carta ancora: apri Lorcana dalla home per iniziare.";
-    rows.appendChild(p);
+    lorBody.appendChild(p);
   } else {
     [...lorCodes].sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric:true})).forEach(code => {
       const label = TOTALS["lorname:" + code] || ("Set " + code);
-      grandOwned += ovRow(rows, label, "lor:" + code + ":", TOTALS["lor:" + code], () => openLorByCode(code), "any");
+      grandOwned += ovRow(lorBody, label, "lor:" + code + ":", TOTALS["lor:" + code], () => openLorByCode(code), "any");
     });
   }
 
@@ -1758,10 +1832,10 @@ function renderOverview(){
   const mtgCodes = new Set();
   for (const id in COLL) if (id.startsWith("mtg:")) mtgCodes.add(id.split(":")[1]);
   if (mtgCodes.size){
-    ovHeader(rows, "Magic");
+    const body = ovSection(rows, "Magic");
     [...mtgCodes].sort().forEach(code => {
       const label = TOTALS["mtgname:" + code] || code.toUpperCase();
-      grandOwned += ovRow(rows, label, "mtg:" + code + ":", TOTALS["mtg:" + code], () => openMtgByCode(code), "any");
+      grandOwned += ovRow(body, label, "mtg:" + code + ":", TOTALS["mtg:" + code], () => openMtgByCode(code), "any");
     });
   }
 
@@ -1769,10 +1843,10 @@ function renderOverview(){
   const legoCodes = new Set();
   for (const id in COLL) if (id.startsWith("lego:")) legoCodes.add(id.split(":")[1]);
   if (legoCodes.size){
-    ovHeader(rows, "LEGO");
+    const body = ovSection(rows, "LEGO");
     [...legoCodes].sort().forEach(code => {
       const label = TOTALS["legoname:" + code] || ("Categoria " + code);
-      grandOwned += ovRow(rows, label, "lego:" + code + ":", TOTALS["lego:" + code], () => openLegoByCat(code), "any");
+      grandOwned += ovRow(body, label, "lego:" + code + ":", TOTALS["lego:" + code], () => openLegoByCat(code), "any");
     });
   }
 
