@@ -111,6 +111,12 @@
   .settile{
     background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-lg);
     overflow:hidden; cursor:pointer; text-align:center; transition:transform .12s, border-color .12s, box-shadow .12s;
+    position:relative;
+  }
+  .settileBadge{
+    position:absolute; top:8px; left:8px; z-index:1;
+    background:var(--gold); color:#fff; font-size:10px; font-weight:600;
+    padding:3px 9px; border-radius:999px;
   }
   .settile:hover{transform:translateY(-3px); border-color:var(--gold); box-shadow:0 10px 24px rgba(0,0,0,.3);}
   .settile img{
@@ -508,7 +514,7 @@ const OP_SETS = [
   {c:"OP14",  n:"The Azure Sea's Seven",     max:145},
   {c:"OP15",  n:"Adventure on Kami's Island",max:135},
   {c:"OP16",  n:"The Time of Battle",        max:140},
-  {c:"OP17",  n:"The World's Strongest Warriors", max:140},
+  {c:"OP17",  n:"The World's Strongest Warriors", max:140, release:"2026-08-28"},
   {c:"EB01",  n:"Memorial Collection",       max:75},
   {c:"EB02",  n:"Anime 25th Collection",     max:75},
   {c:"EB03",  n:"Heroines Edition",          max:80},
@@ -560,7 +566,7 @@ document.addEventListener("DOMContentLoaded", () => {
 const grid = $("grid"), title = $("setTitle"),
       countEl = $("setCount"), statusEl = $("status");
 let game = "op";                 // op | ygo | lor
-let opCurrent = null, opLoaded = 0, opProbed = 0, opProbeTotal = 0;
+let opCurrent = null, opLoaded = 0, opProbed = 0, opProbeTotal = 0, opGen = 0;
 let curPrefix = "";              // prefisso chiavi del set visualizzato
 let ownedInSet = 0;
 let lorSets = null;              // elenco set Lorcana (da API, con cache)
@@ -830,7 +836,7 @@ function makeTile(opt){
   fig.dataset.id = opt.dataId || opt.key;
 
   const img = document.createElement("img");
-  img.loading = "lazy";
+  img.loading = opt.eager ? "eager" : "lazy";
   img.alt = opt.label;
   img.src = opt.thumb;
   if (opt.onImgError) opt.onImgError(img, fig);
@@ -1071,17 +1077,19 @@ document.querySelectorAll("#langBar button, #langBarCards button").forEach(b => 
 });
 
 // Tessera espansione con copertina (catena di fonti) e barra di completamento
-function setTile(code, name, sources, prefix, tot, onClick){
+function setTile(code, name, sources, prefix, tot, onClick, badge){
   const own = ownedCount(prefix);
   const pct = tot ? Math.min(100, Math.round(own / tot * 100)) : 0;
   const el = document.createElement("div");
   el.className = "settile";
   el.innerHTML =
     '<img loading="lazy" alt="">' +
+    (badge ? '<span class="settileBadge">' + badge + '</span>' : '') +
     '<div class="scode">' + code + '</div>' +
     '<div class="sname" title="' + name + '">' + name + '</div>' +
-    '<div class="sbar"><i style="width:' + pct + '%"></i></div>' +
-    '<span class="sprog">' + own + ' / ' + (tot || "?") + '</span>';
+    (badge ? '<span class="sprog" style="display:block;padding-bottom:8px;">' + badge + '</span>'
+           : '<div class="sbar"><i style="width:' + pct + '%"></i></div>' +
+             '<span class="sprog">' + own + ' / ' + (tot || "?") + '</span>');
   chainImg(el.querySelector("img"), sources);
   el.addEventListener("click", onClick);
   return el;
@@ -1091,7 +1099,10 @@ function renderOpSets(){
   const g = $("setsGrid");
   g.innerHTML = "";
   const dir = lang === "jp" ? "img/sets/jpn/" : "img/sets/eng/";
+  const today = new Date();
   OP_SETS.forEach((s, i) => {
+    const upcoming = s.release && new Date(s.release) > today;
+    const badge = upcoming ? "In uscita " + new Date(s.release).toLocaleDateString("it-IT", {day:"numeric", month:"short"}) : null;
     g.appendChild(setTile(s.c, s.n, [
       dir + s.c + ".jpg",
       "img/sets/" + s.c + ".jpg",
@@ -1099,7 +1110,7 @@ function renderOpSets(){
       OP_HOSTS[0](s.c, s.c + "-001"),
       OP_HOSTS[1](s.c, s.c + "-001"),
       OP_HOSTS[2](s.c, s.c + "-001")
-    ], s.c + "-", TOTALS[s.c], () => navSet("op", {i})));
+    ], s.c + "-", TOTALS[s.c], () => navSet("op", {i}), badge));
   });
 }
 
@@ -1141,10 +1152,26 @@ function showOp(i, focusId){
   refreshLangBars();
   const jp = lang === "jp";
   title.innerHTML = s.c + " \u00B7 " + s.n + (jp ? ' <span class="langTag">\ud83c\uddef\ud83c\uddf5 JP</span>' : "");
-  countEl.textContent = "Caricamento carte\u2026";
   grid.innerHTML = "";
   curPrefix = s.c + "-";
-  opLoaded = 0; opProbed = 0; opProbeTotal = s.max; ownedInSet = ownedCount(curPrefix);
+  ownedInSet = ownedCount(curPrefix);
+
+  // Set non ancora uscito: niente sondaggio (fallirebbe su tutte le carte),
+  // messaggio chiaro con la data invece di una griglia vuota poco chiara.
+  if (s.release && new Date(s.release) > new Date()){
+    const d = new Date(s.release).toLocaleDateString("it-IT", {day:"numeric", month:"long", year:"numeric"});
+    countEl.textContent = "Non ancora uscito";
+    statusEl.textContent = s.c + " \u00B7 " + s.n + " esce il " + d + ": le immagini non sono ancora disponibili da nessuna fonte.";
+    opLoaded = 0; opProbed = 0; opProbeTotal = 0;
+    return;
+  }
+
+  countEl.textContent = "Caricamento carte\u2026";
+  opLoaded = 0; opProbed = 0; opProbeTotal = s.max;
+  // Token di generazione: invalida i completamenti "in ritardo" di immagini
+  // richieste da un set aperto in precedenza (altrimenti, navigando in fretta
+  // tra i set, quei completamenti tardivi corrompono il conteggio del set attuale).
+  const myGen = ++opGen;
 
   // Fonti immagini per lingua. JP: prima il sito Bandai JP, poi ripiego sull'EN
   // (il CDN Limitless ha soprattutto la variante _EN), cosi' non resta mai vuoto.
@@ -1159,6 +1186,7 @@ function showOp(i, focusId){
     const tile = makeTile({
       key: keyWithLang(id), dataId: id, label: id,
       thumb: hosts[0],
+      eager: true,  // il sondaggio deve completarsi subito: niente lazy-loading qui
       links: [
         {t:"Prezzi \u20AC su Cardmarket", u:"https://www.cardmarket.com/en/OnePiece/Products/Search?searchString=" + id},
         {t:"Scheda Limitless", u:"https://onepiece.limitlesstcg.com/cards/" + id, alt:true}
@@ -1166,11 +1194,15 @@ function showOp(i, focusId){
       onImgError: (img, fig) => {
         img.dataset.host = "0";
         img.addEventListener("error", () => {
+          if (myGen !== opGen) return;  // il set e' cambiato: ignora questo completamento tardivo
           const h = Number(img.dataset.host) + 1;
           if (h < hosts.length){ img.dataset.host = String(h); img.src = hosts[h]; }
           else { fig.remove(); opProbeDone(); }
         });
-        img.addEventListener("load", () => { opLoaded++; opProbeDone(); });
+        img.addEventListener("load", () => {
+          if (myGen !== opGen) return;  // idem
+          opLoaded++; opProbeDone();
+        });
       }
     });
     grid.appendChild(tile);
