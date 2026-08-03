@@ -554,11 +554,6 @@ function langSuffix(l){ return (l || (langAware() ? lang : "en")) === "jp" ? "~j
 function isJpKey(id){ return id.endsWith("~jp"); }
 // Applica la lingua corrente a una chiave base (per tessere e scanner)
 function keyWithLang(baseKey){ return baseKey + langSuffix(); }
-// Come sopra ma per un gioco esplicito (usato dallo scanner)
-function keyLangFor(g, baseKey){
-  return baseKey + ((LANG_GAMES.includes(g) && lang === "jp") ? "~jp" : "");
-}
-function langLabel(){ return lang === "jp" ? " [JP]" : ""; }
 
 // ---------- Gestore viste: home | sets | cards | overview ----------
 function showView(v){
@@ -1399,6 +1394,49 @@ async function resetWorker(){
   }
 }
 
+// Secondo motore, solo per il rilevamento lingua di One Piece (il codice
+// stampato e' identico in inglese e giapponese, quindi va cercato altrove
+// sulla carta se ci sono caratteri giapponesi). Niente whitelist qui: deve
+// poter riconoscere anche kana/kanji, non solo lettere latine.
+let langWorker = null;
+async function getLangWorker(){
+  if (langWorker) return langWorker;
+  if (!window.Tesseract){
+    await new Promise((ok, ko) => {
+      const sc = document.createElement("script");
+      sc.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+      sc.onload = ok; sc.onerror = () => ko(new Error("CDN non raggiungibile"));
+      document.head.appendChild(sc);
+    });
+  }
+  langWorker = await Tesseract.createWorker("eng+jpn");
+  return langWorker;
+}
+async function resetLangWorker(){
+  if (langWorker){
+    try{ await langWorker.terminate(); }catch(e){ /* ignora */ }
+    langWorker = null;
+  }
+}
+function countCJK(text){
+  const m = (text || "").match(/[\u3040-\u30FF\u4E00-\u9FFF]/g);
+  return m ? m.length : 0;
+}
+// Rileva se la carta e' in giapponese cercando caratteri kana/kanji ovunque
+// sulla foto. Torna "jp", "en", oppure null se il rilevamento non e' riuscito
+// (es. pacchetto lingua non scaricabile): in quel caso si ripiega sul toggle
+// lingua gia' selezionato nell'app, senza far fallire l'intera scansione.
+async function detectCardLanguage(canvas){
+  try{
+    const worker = await getLangWorker();
+    await worker.setParameters({ tessedit_pageseg_mode: "11" });  // testo sparso, cerca ovunque
+    const {data} = await worker.recognize(canvas);
+    return countCJK(data.text || "") >= 2 ? "jp" : "en";
+  }catch(e){
+    return null;
+  }
+}
+
 // Pre-elaborazione: ridimensiona, scala di grigi, aumenta contrasto.
 // Accetta sia <img> che ImageBitmap (drawImage funziona con entrambi),
 // per questo le dimensioni sorgente vengono passate esplicitamente.
@@ -1415,30 +1453,6 @@ function preprocess(drawable, srcW, srcH){
   for (let i = 0; i < px.length; i += 4){
     let g = 0.299 * px[i] + 0.587 * px[i+1] + 0.114 * px[i+2];
     g = (g - 128) * 1.6 + 128;                 // contrasto
-    g = Math.max(0, Math.min(255, g));
-    px[i] = px[i+1] = px[i+2] = g;
-  }
-  ctx.putImageData(d, 0, 0);
-  return cv;
-}
-
-// Ritaglia una regione della foto (in frazioni 0-1 di larghezza/altezza) e la
-// INGRANDISCE fino a targetW: utile per le fasce strette dove i produttori
-// stampano il codice, che nella foto intera sono troppo piccole per l'OCR.
-function preprocessRegion(drawable, srcW, srcH, fx, fy, fw, fh, targetW){
-  const cropW = Math.round(srcW * fw), cropH = Math.round(srcH * fh);
-  const sx = Math.round(srcW * fx), sy = Math.round(srcH * fy);
-  const scale = Math.max(1, targetW / cropW);
-  const cv = document.createElement("canvas");
-  cv.width = Math.round(cropW * scale);
-  cv.height = Math.round(cropH * scale);
-  const ctx = cv.getContext("2d");
-  ctx.drawImage(drawable, sx, sy, cropW, cropH, 0, 0, cv.width, cv.height);
-  const d = ctx.getImageData(0, 0, cv.width, cv.height);
-  const px = d.data;
-  for (let i = 0; i < px.length; i += 4){
-    let g = 0.299 * px[i] + 0.587 * px[i+1] + 0.114 * px[i+2];
-    g = (g - 128) * 1.6 + 128;
     g = Math.max(0, Math.min(255, g));
     px[i] = px[i+1] = px[i+2] = g;
   }
@@ -1481,43 +1495,23 @@ $("scanFile").addEventListener("change", async () => {
     }
     const worker = await getWorker();
 
-    // Il codice e' quasi sempre stampato in una fascia stretta sul bordo della
-    // carta: provo alcuni ritagli mirati (molto piu' efficaci che leggere la
-    // foto intera, dove il codice e' piccolo in mezzo all'illustrazione).
-    const regions = [
-      {fx:0.00, fy:0.84, fw:0.55, fh:0.14},  // basso-sinistra (One Piece, Lorcana)
-      {fx:0.45, fy:0.84, fw:0.55, fh:0.14},  // basso-destra
-      {fx:0.00, fy:0.86, fw:1.00, fh:0.12},  // striscia intera in basso (Yu-Gi-Oh!, righe lunghe)
-    ];
-    const texts = [];
-    let m = null;
+    // Leggo la carta intera (non un ritaglio): lo scanner foto serve solo per
+    // i giochi di carte (One Piece, Yu-Gi-Oh!, Lorcana), non per LEGO, quindi
+    // basta cercare i pattern "sicuri" ancorati da lettere.
+    setStatus("Leggo il codice sulla carta\u2026");
+    await worker.setParameters({ tessedit_pageseg_mode: "11" });  // testo sparso
+    const cv = preprocess(drawable, srcW, srcH);
+    const {data} = await worker.recognize(cv);
+    const m = matchConfident((data.text || "").toUpperCase());
 
-    // Primo giro: SOLO pattern sicuri (OP/Yu-Gi-Oh!/Lorcana, hanno lettere che
-    // li ancorano). Provo tutti i ritagli prima di considerare il fallback LEGO,
-    // cosi' un ritaglio rumoroso non puo' scavalcare il codice vero letto
-    // correttamente in un ritaglio successivo.
-    for (let i = 0; i < regions.length; i++){
-      setStatus("Leggo il codice sulla carta (tentativo " + (i + 1) + " di " + (regions.length + 1) + ")\u2026");
-      await worker.setParameters({ tessedit_pageseg_mode: "7" });  // riga singola
-      const cv = preprocessRegion(drawable, srcW, srcH, regions[i].fx, regions[i].fy, regions[i].fw, regions[i].fh, 900);
-      const {data} = await worker.recognize(cv);
-      const t = (data.text || "").toUpperCase();
-      texts.push(t);
-      m = matchConfident(t);
-      if (m) break;
-    }
-    if (!m){
-      setStatus("Analizzo l'intera foto (tentativo " + (regions.length + 1) + " di " + (regions.length + 1) + ")\u2026");
-      await worker.setParameters({ tessedit_pageseg_mode: "11" });  // testo sparso
-      const {data} = await worker.recognize(preprocess(drawable, srcW, srcH));
-      const t = (data.text || "").toUpperCase();
-      texts.push(t);
-      m = matchConfident(t);
-    }
-    // Il fallback "a rischio" (numero LEGO nudo) si prova solo ora, su tutti i
-    // testi gia' letti, e solo se nessun pattern sicuro e' stato trovato.
-    if (!m){
-      for (const t of texts){ m = matchLego(t); if (m) break; }
+    // One Piece ha lo stesso codice in inglese e in giapponese, quindi la
+    // lingua non si legge dal codice: cerco caratteri kana/kanji altrove
+    // sulla carta con un secondo motore OCR dedicato. Se il rilevamento non
+    // riesce (es. connessione debole), resta il toggle lingua gia' selezionato.
+    if (m && m.type === "op"){
+      setStatus("Verifico la lingua (inglese/giapponese)\u2026");
+      const detected = await detectCardLanguage(cv);
+      if (detected) m.detectedLang = detected;
     }
     return m;
   }
@@ -1528,10 +1522,8 @@ $("scanFile").addEventListener("change", async () => {
     if (m){
       await applyCardMatch(m);
     } else {
-      setStatus("Nessuna corrispondenza trovata dopo l'analisi. Fotografa da vicino e con buona luce: " +
-        "One Piece \u2192 codice in basso a sinistra (OP05-119); Yu-Gi-Oh! \u2192 codice sotto l'illustrazione " +
-        "(MRD-EN060); Lorcana \u2192 tutta la riga in basso a sinistra (12/204 EN 3); LEGO \u2192 il numero " +
-        "di set sulla scatola o sul libretto istruzioni (es. 75192).");
+      setStatus("Nessuna corrispondenza trovata dopo l'analisi. Fotografa l'intera carta, ben illuminata e a fuoco: " +
+        "funziona per One Piece, Yu-Gi-Oh! e Lorcana (non per LEGO, che si cerca dall'apposito campo di ricerca).");
     }
   }catch(e){
     timedOut = (e && e.message === "timeout");
@@ -1544,7 +1536,8 @@ $("scanFile").addEventListener("change", async () => {
     if (bitmap && bitmap.close) bitmap.close();
     if (url) URL.revokeObjectURL(url);
     if (myGen === scanGen) statusEl.classList.remove("busy");
-    await resetWorker();  // motore pulito per il prossimo scatto: obbligatorio dopo un timeout, utile comunque
+    await resetWorker();      // motore codice pulito per il prossimo scatto
+    await resetLangWorker();  // idem per il motore di rilevamento lingua
   }
 });
 
@@ -1589,31 +1582,22 @@ function matchConfident(rawText){
   return null;
 }
 
-// Pattern "a rischio": un numero nudo senza lettere che lo ancorino, quindi
-// un OCR rumoroso puo' produrne uno per caso. Va provato SOLO come ultima
-// spiaggia, dopo aver verificato matchConfident su ogni tentativo disponibile
-// (altrimenti un rumore letto per primo puo' scavalcare il codice vero letto
-// correttamente in un tentativo successivo - il bug osservato su OP09-020,
-// scambiata per il set LEGO 40008).
-function matchLego(rawText){
-  const clean = (rawText || "").toUpperCase().replace(/[\u2013\u2014]/g, "-");
-  const mLego = clean.match(/\b(\d{4,6})(?:-\d{1,2})?\b/);
-  if (mLego) return {type: "lego", canon: "lego:" + mLego[1], code: mLego[1]};
-  return null;
-}
-
-// Compatibilita': prova prima i pattern sicuri, poi quello a rischio.
-function matchCard(rawText){
-  return matchConfident(rawText) || matchLego(rawText);
-}
-
 // --- Azione a partire da un match (effetti: aggiunge, redirige, aggiorna status) ---
 async function applyCardMatch(m){
   if (m.type === "op"){
     const idx = OP_SETS.findIndex(s => s.c === m.setCode);
     if (idx < 0){ statusEl.textContent = "Codice letto (" + m.id + ") ma il set non \u00E8 in elenco."; return; }
-    const q = bumpKey(keyLangFor("op", m.id));
-    statusEl.textContent = "\u2713 " + m.id + langLabel() + " aggiunta alla collezione (ora x" + q + ")";
+    // Preferisco la lingua rilevata dalla foto (se il rilevamento e' riuscito);
+    // altrimenti uso il toggle attualmente selezionato, come prima.
+    const opLang = m.detectedLang || lang;
+    const suffix = opLang === "jp" ? "~jp" : "";
+    const q = bumpKey(m.id + suffix);
+    const tag = opLang === "jp" ? " [JP]" : " [EN]";
+    statusEl.textContent = "\u2713 " + m.id + tag + " aggiunta alla collezione (ora x" + q + ")";
+    if (opLang !== lang){
+      lang = opLang;
+      localStorage.setItem("tcg_lang", lang);
+    }
     showOp(idx, m.id);
     return;
   }
@@ -1652,20 +1636,6 @@ async function applyCardMatch(m){
         ? "Rilevata carta giapponese (" + m.printed + "), ma il database gratuito \u00E8 solo inglese e non risolve i codici set JP. Aprila dal set inglese in modalit\u00E0 \ud83c\uddef\ud83c\uddf5 e segna col +."
         : "Codice letto (" + m.printed + ") ma la carta non risulta nel database.";
     }
-    return;
-  }
-  if (m.type === "lego"){
-    statusEl.textContent = "Codice letto: " + m.code + " \u00B7 cerco nel catalogo LEGO\u2026";
-    const found = await findLegoSet(m.code);
-    if (!found){
-      statusEl.textContent = "Codice " + m.code + " non trovato nel catalogo LEGO: potrebbe non essere un numero di " +
-        "set (es. prezzo o et\u00E0 consigliata letti per errore), oppure rientrare in una categoria esclusa dal catalogo.";
-      return;
-    }
-    const key = "lego:" + found.cat.id + ":" + found.entry.n;
-    const q = bumpKey(key);
-    statusEl.textContent = "\u2713 " + found.entry.t + " [" + found.entry.n + "] aggiunto alla collezione (ora x" + q + ")";
-    showLegoCat(found.catIdx, key);
     return;
   }
 }
