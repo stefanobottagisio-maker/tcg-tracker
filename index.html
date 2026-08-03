@@ -1489,7 +1489,11 @@ async function detectCardLanguage(canvas){
 // Accetta sia <img> che ImageBitmap (drawImage funziona con entrambi),
 // per questo le dimensioni sorgente vengono passate esplicitamente.
 function preprocess(drawable, srcW, srcH){
-  const maxDim = 1600;
+  // Tetto piu' alto di prima: una foto di scatola/carta ad alta risoluzione
+  // (comune con la fotocamera nativa) non va schiacciata troppo, altrimenti
+  // il codice stampato - gia' piccolo rispetto all'intera carta - diventa
+  // troppo minuto in pixel per un OCR affidabile.
+  const maxDim = 2400;
   const scale = Math.min(1, maxDim / Math.max(srcW, srcH)) || 1;
   const cv = document.createElement("canvas");
   cv.width = Math.round(srcW * scale);
@@ -1501,6 +1505,31 @@ function preprocess(drawable, srcW, srcH){
   for (let i = 0; i < px.length; i += 4){
     let g = 0.299 * px[i] + 0.587 * px[i+1] + 0.114 * px[i+2];
     g = (g - 128) * 1.6 + 128;                 // contrasto
+    g = Math.max(0, Math.min(255, g));
+    px[i] = px[i+1] = px[i+2] = g;
+  }
+  ctx.putImageData(d, 0, 0);
+  return cv;
+}
+
+// Ritaglia una regione della foto (in frazioni 0-1 di larghezza/altezza) e la
+// INGRANDISCE fino a targetW SOLO se il ritaglio nativo e' piu' piccolo: cosi'
+// una foto ad alta risoluzione mantiene tutta la sua nitidezza sulla zona del
+// codice, invece di essere schiacciata come capita leggendo la carta intera.
+function preprocessRegion(drawable, srcW, srcH, fx, fy, fw, fh, targetW){
+  const cropW = Math.round(srcW * fw), cropH = Math.round(srcH * fh);
+  const sx = Math.round(srcW * fx), sy = Math.round(srcH * fy);
+  const scale = Math.max(1, targetW / cropW);
+  const cv = document.createElement("canvas");
+  cv.width = Math.round(cropW * scale);
+  cv.height = Math.round(cropH * scale);
+  const ctx = cv.getContext("2d");
+  ctx.drawImage(drawable, sx, sy, cropW, cropH, 0, 0, cv.width, cv.height);
+  const d = ctx.getImageData(0, 0, cv.width, cv.height);
+  const px = d.data;
+  for (let i = 0; i < px.length; i += 4){
+    let g = 0.299 * px[i] + 0.587 * px[i+1] + 0.114 * px[i+2];
+    g = (g - 128) * 1.6 + 128;
     g = Math.max(0, Math.min(255, g));
     px[i] = px[i+1] = px[i+2] = g;
   }
@@ -1558,7 +1587,7 @@ $("scanFile").addEventListener("change", async () => {
   statusEl.classList.add("busy");
   statusEl.textContent = "Foto ricevuta \u2014 analisi in corso, pu\u00F2 richiedere qualche secondo\u2026";
 
-  const RECOGNIZE_TIMEOUT_MS = 25000;
+  const RECOGNIZE_TIMEOUT_MS = 30000;
   let bitmap = null, url = null, timedOut = false;
 
   async function runRecognition(){
@@ -1577,22 +1606,46 @@ $("scanFile").addEventListener("change", async () => {
     }
     const worker = await getWorker();
 
-    // Leggo la carta intera (non un ritaglio): lo scanner foto serve solo per
-    // i giochi di carte (One Piece, Yu-Gi-Oh!, Lorcana), non per LEGO, quindi
-    // basta cercare i pattern "sicuri" ancorati da lettere.
-    setStatus("Leggo il codice sulla carta\u2026");
-    await worker.setParameters({ tessedit_pageseg_mode: "11" });  // testo sparso
-    const cv = preprocess(drawable, srcW, srcH);
-    const {data} = await worker.recognize(cv);
-    const m = matchConfident((data.text || "").toUpperCase());
+    // Il codice e' quasi sempre stampato in una fascia stretta vicino al bordo
+    // della carta: provo prima alcuni ritagli mirati, che mantengono tutta la
+    // risoluzione nativa della foto su quella piccola zona (molto piu' efficace
+    // che leggere la carta intera, dove lo stesso codice - schiacciato insieme
+    // a tutta l'illustrazione - diventa troppo piccolo in pixel per l'OCR).
+    // Non c'e' piu' il rischio di falsi positivi LEGO che c'era in passato:
+    // lo scanner foto cerca solo pattern con lettere (One Piece/Yu-Gi-Oh!/Lorcana).
+    const regions = [
+      {fx:0.00, fy:0.80, fw:0.55, fh:0.18},  // basso-sinistra
+      {fx:0.45, fy:0.80, fw:0.55, fh:0.18},  // basso-destra
+      {fx:0.00, fy:0.82, fw:1.00, fh:0.16},  // striscia intera in basso
+    ];
+    let m = null;
+    for (let i = 0; i < regions.length; i++){
+      setStatus("Leggo il codice sulla carta (tentativo " + (i + 1) + " di " + (regions.length + 1) + ")\u2026");
+      await worker.setParameters({ tessedit_pageseg_mode: "7" });  // riga singola
+      const cv = preprocessRegion(drawable, srcW, srcH, regions[i].fx, regions[i].fy, regions[i].fw, regions[i].fh, 1100);
+      const {data} = await worker.recognize(cv);
+      m = matchConfident((data.text || "").toUpperCase());
+      if (m) break;
+    }
+
+    // Ultima spiaggia: carta intera a risoluzione piu' alta possibile, modalita'
+    // "testo sparso" (il codice potrebbe non rientrare nelle fasce provate sopra).
+    const wholeCv = preprocess(drawable, srcW, srcH);
+    if (!m){
+      setStatus("Analizzo l'intera foto (tentativo " + (regions.length + 1) + " di " + (regions.length + 1) + ")\u2026");
+      await worker.setParameters({ tessedit_pageseg_mode: "11" });
+      const {data} = await worker.recognize(wholeCv);
+      m = matchConfident((data.text || "").toUpperCase());
+    }
 
     // One Piece ha lo stesso codice in inglese e in giapponese, quindi la
     // lingua non si legge dal codice: cerco caratteri kana/kanji altrove
-    // sulla carta con un secondo motore OCR dedicato. Se il rilevamento non
-    // riesce (es. connessione debole), resta il toggle lingua gia' selezionato.
+    // sulla carta (sulla foto intera, non sul ritaglio del solo codice) con
+    // un secondo motore OCR dedicato. Se il rilevamento non riesce (es.
+    // connessione debole), resta il toggle lingua gia' selezionato.
     if (m && m.type === "op"){
       setStatus("Verifico la lingua (inglese/giapponese)\u2026");
-      const detected = await detectCardLanguage(cv);
+      const detected = await detectCardLanguage(wholeCv);
       if (detected) m.detectedLang = detected;
     }
     return m;
