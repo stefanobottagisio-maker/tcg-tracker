@@ -1,0 +1,19 @@
+# Linee/temi LEGO da escludere dal catalogo dell'app.
+#
+# Una riga = una parola o frase da cercare (senza distinzione tra maiuscole e
+# minuscole) nel nome della categoria LEGO. Se il nome della categoria la
+# contiene, quella categoria viene saltata interamente (nessuna delle sue
+# migliaia di set finisce nel catalogo).
+#
+# Aggiungi o togli righe come preferisci: ogni modifica ha effetto dal
+# prossimo giro del workflow "Aggiorna catalogo LEGO" (Actions > Run workflow
+# per applicarla subito, altrimenti gira da sola ogni domenica notte).
+#
+# Le righe che iniziano con # sono commenti e vengono ignorate.
+
+duplo
+education
+bulk
+supplemental
+gear
+book
