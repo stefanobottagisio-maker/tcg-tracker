@@ -1814,14 +1814,15 @@ function ovRow(rows, label, prefix, tot, onClick, langFilter){
 // Crea una sezione collassabile: intestazione cliccabile (con chevron) +
 // corpo che contiene le righe. Le chiamate a ovRow vanno fatte sul CONTENITORE
 // restituito (non piu' su "rows" direttamente), cosi' restano dentro la sezione.
-function ovSection(rows, text, flagLang){
+function ovSection(rows, text, flagLang, badge){
   const wrap = document.createElement("div");
-  wrap.className = "ovsection";
+  wrap.className = "ovsection collapsed";
   const head = document.createElement("button");
   head.type = "button";
   head.className = "ovgame";
   const flag = flagLang ? '<span class="ovflag">' + FLAG_SVG[flagLang] + '</span>' : '';
-  head.innerHTML = '<span class="ovchev">\u25BE</span><span>' + text + '</span>' + flag;
+  const count = badge ? '<span class="ovsectionCount">' + badge + '</span>' : '';
+  head.innerHTML = '<span class="ovchev">\u25BE</span><span>' + text + '</span>' + count + flag;
   const body = document.createElement("div");
   body.className = "ovsectionBody";
   head.addEventListener("click", () => wrap.classList.toggle("collapsed"));
@@ -1829,6 +1830,24 @@ function ovSection(rows, text, flagLang){
   wrap.appendChild(body);
   rows.appendChild(wrap);
   return body;
+}
+// Aggrega possesso/totale su un elenco di prefissi (usato per il numero
+// riassuntivo a destra di ogni intestazione in "La mia collezione").
+function sumOwnedTotal(prefixes, langFilter){
+  let owned = 0, total = 0, allKnown = true;
+  prefixes.forEach(p => {
+    owned += ownedCount(p.prefix, langFilter);
+    if (p.tot) total += p.tot; else allKnown = false;
+  });
+  return {owned, total, allKnown};
+}
+function cardsBadge(prefixes, langFilter){
+  const {owned, total, allKnown} = sumOwnedTotal(prefixes, langFilter);
+  if (allKnown && total > 0){
+    const pct = Math.round(owned / total * 100);
+    return owned + " / " + total + " \u00B7 " + pct + "%";
+  }
+  return owned + " carte";
 }
 function hasLangCards(prefix, lf){ return ownedCount(prefix, lf) > 0; }
 
@@ -1896,7 +1915,8 @@ function renderOverview(){
   opEnabled.forEach(([lf, lbl]) => {
     const anyOp = OP_SETS.some(s => hasLangCards(s.c + "-", lf));
     if (lf === "jp" && !anyOp) return;             // niente sezione JP vuota
-    const body = ovSection(rows, "One Piece \u2013 " + lbl, lf);
+    const opItems = OP_SETS.map(s => ({prefix: s.c + "-", tot: TOTALS[s.c]}));
+    const body = ovSection(rows, "One Piece \u2013 " + lbl, lf, cardsBadge(opItems, lf));
     OP_SETS.forEach((s, i) => {
       grandOwned += ovRow(body, s.c, s.c + "-", TOTALS[s.c],
         () => { lang = lf; localStorage.setItem("tcg_lang", lf); showOp(i); }, lf);
@@ -1913,7 +1933,8 @@ function renderOverview(){
       codes.add(id.split(":")[1]);
     }
     if (codes.size === 0) return;
-    const body = ovSection(rows, "Yu-Gi-Oh! \u2013 " + (lf === "jp" ? "Giapponese" : "Inglese"), lf);
+    const ygoItems = [...codes].map(code => ({prefix: "ygo:" + code + ":", tot: TOTALS["ygo:" + code]}));
+    const body = ovSection(rows, "Yu-Gi-Oh! \u2013 " + (lf === "jp" ? "Giapponese" : "Inglese"), lf, cardsBadge(ygoItems, lf));
     [...codes].sort().forEach(code => {
       const label = TOTALS["ygoname:" + code] || code;
       grandOwned += ovRow(body, label, "ygo:" + code + ":", TOTALS["ygo:" + code],
@@ -1925,7 +1946,8 @@ function renderOverview(){
   const lorCodes = new Set();
   for (const id in COLL) if (id.startsWith("lor:")) lorCodes.add(id.split(":")[1]);
   for (const k in TOTALS) if (k.startsWith("lor:")) lorCodes.add(k.slice(4));
-  const lorBody = ovSection(rows, "Lorcana");
+  const lorItems = [...lorCodes].map(code => ({prefix: "lor:" + code + ":", tot: TOTALS["lor:" + code]}));
+  const lorBody = ovSection(rows, "Lorcana", null, cardsBadge(lorItems, "any"));
   if (lorCodes.size === 0){
     const p = document.createElement("p"); p.className = "ovempty";
     p.textContent = "Nessuna carta ancora: apri Lorcana dalla home per iniziare.";
@@ -1941,7 +1963,8 @@ function renderOverview(){
   const mtgCodes = new Set();
   for (const id in COLL) if (id.startsWith("mtg:")) mtgCodes.add(id.split(":")[1]);
   if (mtgCodes.size){
-    const body = ovSection(rows, "Magic");
+    const mtgItems = [...mtgCodes].map(code => ({prefix: "mtg:" + code + ":", tot: TOTALS["mtg:" + code]}));
+    const body = ovSection(rows, "Magic", null, cardsBadge(mtgItems, "any"));
     [...mtgCodes].sort().forEach(code => {
       const label = TOTALS["mtgname:" + code] || code.toUpperCase();
       grandOwned += ovRow(body, label, "mtg:" + code + ":", TOTALS["mtg:" + code], () => openMtgByCode(code), "any");
@@ -1952,7 +1975,9 @@ function renderOverview(){
   const legoCodes = new Set();
   for (const id in COLL) if (id.startsWith("lego:")) legoCodes.add(id.split(":")[1]);
   if (legoCodes.size){
-    const body = ovSection(rows, "LEGO");
+    let legoOwned = 0;
+    legoCodes.forEach(code => { legoOwned += ownedCount("lego:" + code + ":", "any"); });
+    const body = ovSection(rows, "LEGO", null, legoOwned + " set");
     [...legoCodes].sort().forEach(code => {
       const label = TOTALS["legoname:" + code] || ("Categoria " + code);
       grandOwned += ovRow(body, label, "lego:" + code + ":", TOTALS["lego:" + code], () => openLegoByCat(code), "any");
