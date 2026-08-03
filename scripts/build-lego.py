@@ -31,7 +31,25 @@ HEADERS = {"Authorization": "key " + API_KEY, "User-Agent": "collezionista-matto
 # Filtro qualita': scarta temi troppo piccoli (bomboniere, ricambi, ecc.) e le
 # linee non da collezione che intaserebbero le categorie senza valore per un collezionista.
 MIN_SETS_PER_CATEGORY = 15
-EXCLUDE_NAME_SUBSTRINGS = ("duplo", "education", "bulk", "supplemental", "gear", "book")
+EXCLUDE_FILE = "lego-exclude.txt"
+# Valori di riserva se il file esterno non esiste ancora.
+DEFAULT_EXCLUDE = ("duplo", "education", "bulk", "supplemental", "gear", "book")
+
+
+def load_exclude_list():
+    """Legge lego-exclude.txt: una riga = un nome/parola da escludere (case-insensitive).
+    Righe vuote o che iniziano con # vengono ignorate. Se il file non esiste,
+    usa l'elenco di riserva qui sopra."""
+    if not os.path.exists(EXCLUDE_FILE):
+        return DEFAULT_EXCLUDE
+    out = []
+    with open(EXCLUDE_FILE, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            out.append(line.lower())
+    return tuple(out) if out else DEFAULT_EXCLUDE
 
 
 def get_json(url, tries=4):
@@ -87,6 +105,9 @@ def main():
     if not API_KEY:
         sys.exit("REBRICKABLE_API_KEY non impostata: aggiungila come secret del repository.")
 
+    exclude = load_exclude_list()
+    print(f"Categorie/parole escluse ({EXCLUDE_FILE}): {', '.join(exclude)}\n")
+
     print("Scarico l'elenco dei temi...")
     themes = fetch_all_pages("themes")
     name_of, top_ancestor = build_theme_maps(themes)
@@ -104,7 +125,7 @@ def main():
             continue
         cat_id = top_ancestor(theme_id)
         cat_name = name_of.get(cat_id, str(cat_id))
-        if any(bad in cat_name.lower() for bad in EXCLUDE_NAME_SUBSTRINGS):
+        if any(bad in cat_name.lower() for bad in exclude):
             continue
         entry = by_cat.setdefault(cat_id, {"name": cat_name, "sets": []})
         entry["sets"].append({
