@@ -280,50 +280,6 @@
   #zoomLinks a:hover{filter:brightness(1.1);}
   #zoomPrice{display:block; margin-top:8px; color:var(--gold); font-size:13px;}
 
-  /* Scanner live fotocamera */
-  #camScan{
-    position:fixed; inset:0; z-index:70; display:none; flex-direction:column;
-    background:#05090F;
-  }
-  #camScan.open{display:flex;}
-  #camStage{position:relative; flex:1; overflow:hidden; display:flex; align-items:center; justify-content:center;}
-  #camVideo{width:100%; height:100%; object-fit:cover; background:#05090F;}
-  #camGuide{
-    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:min(78vw,440px); height:132px; border:3px solid var(--gold);
-    border-radius:var(--radius-lg); box-shadow:0 0 0 100vmax rgba(5,9,15,.55);
-    display:flex; align-items:flex-end; justify-content:center;
-  }
-  #camGuideHint{
-    background:rgba(5,9,15,.72); color:var(--parchment); font-size:12px;
-    padding:5px 11px; border-radius:999px; margin-bottom:-26px; white-space:nowrap;
-  }
-  #camZoom{
-    position:absolute; right:14px; bottom:14px; z-index:2;
-    display:flex; align-items:center; gap:8px;
-    background:rgba(5,9,15,.72); border-radius:999px; padding:5px 8px;
-  }
-  #camZoom button{
-    width:30px; height:30px; border-radius:999px; border:1px solid var(--line);
-    background:var(--panel); color:var(--parchment); font-size:16px; line-height:1; cursor:pointer;
-  }
-  #camZoom button:hover{border-color:var(--gold);}
-  #camZoomLabel{color:var(--parchment); font-size:12px; min-width:32px; text-align:center;}
-  #camBar{
-    background:var(--panel); border-top:1px solid var(--line);
-    padding:12px 16px; display:flex; align-items:center; gap:6px 12px; flex-wrap:wrap;
-  }
-  #camStatus{color:var(--parchment); font-size:13px; flex:1; min-width:160px;}
-  #camDiag{color:var(--mute); font-size:11px; width:100%; order:3;}
-  #camBtns{display:flex; gap:8px;}
-  #camBar button{
-    background:var(--gold); color:#fff; border:none; border-radius:999px;
-    padding:10px 18px; font:inherit; font-weight:600; cursor:pointer;
-  }
-  #camBar button.alt{background:var(--sea); color:var(--parchment); border:1px solid var(--line);}
-  #camBar button:hover{filter:brightness(1.08);}
-  .camLock #camGuide{border-color:#39d353;}
-
   #status{color:var(--mute); font-size:13px; padding:8px 0;}
 
   /* Area utente e login */
@@ -471,26 +427,6 @@
       <span id="zoomLinks"></span>
     </figcaption>
   </figure>
-</div>
-
-<div id="camScan" role="dialog" aria-modal="true" aria-label="Scanner fotocamera">
-  <div id="camStage">
-    <video id="camVideo" playsinline muted></video>
-    <div id="camGuide"><span id="camGuideHint">Inquadra il codice &middot; tocca per mettere a fuoco</span></div>
-    <div id="camZoom" hidden>
-      <button id="camZoomOut" type="button">&#8722;</button>
-      <span id="camZoomLabel">1.0x</span>
-      <button id="camZoomIn" type="button">+</button>
-    </div>
-  </div>
-  <div id="camBar">
-    <span id="camStatus">Avvio fotocamera\u2026</span>
-    <span id="camDiag"></span>
-    <div id="camBtns">
-      <button id="camPhoto" type="button" class="alt">Usa una foto</button>
-      <button id="camClose" type="button">Chiudi</button>
-    </div>
-  </div>
 </div>
 
 <script>
@@ -1430,6 +1366,15 @@ async function getWorker(){
   });
   return tessWorker;
 }
+// Ricrea il motore da zero: usato dopo ogni scatto, cosi' un accumulo di
+// memoria o di stato interno (piu' letture per foto, su un telefono con
+// risorse limitate) non pregiudica la scansione successiva.
+async function resetWorker(){
+  if (tessWorker){
+    try{ await tessWorker.terminate(); }catch(e){ /* ignora */ }
+    tessWorker = null;
+  }
+}
 
 // Pre-elaborazione: ridimensiona, scala di grigi, aumenta contrasto.
 // Accetta sia <img> che ImageBitmap (drawImage funziona con entrambi),
@@ -1478,8 +1423,8 @@ function preprocessRegion(drawable, srcW, srcH, fx, fy, fw, fh, targetW){
   return cv;
 }
 
-$("btnScan").addEventListener("click", () => startCamScan());
-$("btnScanGlobal").addEventListener("click", () => startCamScan());
+$("btnScan").addEventListener("click", () => $("scanFile").click());
+$("btnScanGlobal").addEventListener("click", () => $("scanFile").click());
 $("scanFile").addEventListener("change", async () => {
   const f = $("scanFile").files[0];
   $("scanFile").value = "";
@@ -1529,7 +1474,6 @@ $("scanFile").addEventListener("change", async () => {
       const {data} = await worker.recognize(preprocess(drawable, srcW, srcH));
       m = matchCard((data.text || "").toUpperCase());
     }
-    await worker.setParameters({ tessedit_pageseg_mode: "3" });  // ripristino il default per lo scanner live
 
     if (m){
       await applyCardMatch(m);
@@ -1544,6 +1488,7 @@ $("scanFile").addEventListener("change", async () => {
   }finally{
     if (bitmap && bitmap.close) bitmap.close();
     if (url) URL.revokeObjectURL(url);
+    await resetWorker();  // motore pulito per il prossimo scatto, riuscito o no
   }
 });
 
@@ -1666,205 +1611,6 @@ async function handleScannedText(text){
     "sulla scatola o sul libretto istruzioni (es. 75192), inquadrando da vicino solo quel numero.";
 }
 
-// ============================================================
-// SCANNER LIVE (fotocamera continua, riconoscimento on-device)
-// ============================================================
-let camStream = null, camActive = false, camLastCanon = null, camCapture = null, camZoomCaps = null;
-const camVideo = $("camVideo"), camScan = $("camScan");
-
-async function startCamScan(){
-  camScan.classList.add("open");
-  camScan.classList.remove("camLock");
-  $("camStatus").textContent = "Avvio fotocamera\u2026";
-  $("camDiag").textContent = "";
-  $("camZoom").hidden = true;
-  camLastCanon = null;
-  try{
-    camStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: "environment" },
-        width: { ideal: 1920 }, height: { ideal: 1080 }
-      },
-      audio: false
-    });
-  }catch(e){
-    $("camStatus").textContent = "Fotocamera non disponibile (" + (e.name || e.message) +
-      "). Usa \u201CUsa una foto\u201D. Nota: su alcuni browser serve HTTPS.";
-    return;
-  }
-  camVideo.srcObject = camStream;
-  await camVideo.play().catch(() => {});
-  await new Promise(r => { if (camVideo.videoWidth) r(); else camVideo.addEventListener("loadedmetadata", r, {once:true}); });
-  const focusMode = await enableAutofocus();
-  await setupZoom();
-  // Dove supportato (soprattutto Chrome Android), ImageCapture.grabFrame() legge
-  // dal buffer camera a piena qualita', diverso e spesso piu' nitido rispetto
-  // al flusso video "live" ottimizzato per una preview fluida a bassa latenza.
-  camCapture = null;
-  if (window.ImageCapture){
-    try{ camCapture = new ImageCapture(camStream.getVideoTracks()[0]); }
-    catch(e){ camCapture = null; }
-  }
-  // Riga diagnostica: utile per capire, dal messaggio che mi riporti, cosa
-  // supporta davvero il tuo dispositivo invece di doverlo ipotizzare.
-  $("camDiag").textContent = "Risoluzione " + camVideo.videoWidth + "\u00D7" + camVideo.videoHeight +
-    " \u00B7 autofocus " + (focusMode || "non disponibile") +
-    " \u00B7 zoom " + (camZoomCaps ? camZoomCaps.min + "\u2013" + camZoomCaps.max + "x" : "non disponibile") +
-    " \u00B7 cattura " + (camCapture ? "alta qualit\u00E0" : "standard");
-  $("camStatus").textContent = "Preparo il motore OCR\u2026";
-  try{ await getWorker(); }catch(e){ $("camStatus").textContent = "Motore OCR non caricato: serve connessione."; return; }
-  camActive = true;
-  $("camStatus").textContent = "Inquadra il codice della carta (tocca lo schermo se sfuocato)\u2026";
-  camLoop();
-}
-
-// Prova ad attivare la messa a fuoco continua sul sensore, dove il browser lo
-// permette (soprattutto Chrome Android). Torna il nome della modalita' attivata
-// (o null) per la riga diagnostica; se non supportato non fa nulla di rischioso.
-async function enableAutofocus(){
-  try{
-    const track = camStream && camStream.getVideoTracks()[0];
-    if (!track || !track.getCapabilities) return null;
-    const caps = track.getCapabilities();
-    if (caps.focusMode && caps.focusMode.includes("continuous")){
-      await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] });
-      return "continuo";
-    }
-    if (caps.focusMode && caps.focusMode.length) return caps.focusMode[0];
-  }catch(e){ /* non supportato: si prosegue con la messa a fuoco automatica di default */ }
-  return null;
-}
-
-// Rileva lo zoom ottico/digitale della fotocamera (dove esposto dal browser,
-// soprattutto Chrome Android) e mostra i controlli +/-. Parte da un valore
-// leggermente ingrandito cosi' non serve avvicinare troppo il telefono alla
-// carta, cosa che su molte fotocamere supera la distanza minima di messa a
-// fuoco e produce un'immagine irrimediabilmente sfocata.
-async function setupZoom(){
-  camZoomCaps = null;
-  try{
-    const track = camStream && camStream.getVideoTracks()[0];
-    if (!track || !track.getCapabilities) return;
-    const caps = track.getCapabilities();
-    if (!caps.zoom) return;
-    camZoomCaps = {min: caps.zoom.min, max: caps.zoom.max, step: caps.zoom.step || 0.1, track};
-    const start = Math.min(caps.zoom.max, caps.zoom.min + (caps.zoom.max - caps.zoom.min) * 0.25);
-    await applyZoom(start);
-    $("camZoom").hidden = false;
-  }catch(e){ camZoomCaps = null; }
-}
-async function applyZoom(value){
-  if (!camZoomCaps) return;
-  const v = Math.max(camZoomCaps.min, Math.min(camZoomCaps.max, value));
-  try{
-    await camZoomCaps.track.applyConstraints({ advanced: [{ zoom: v }] });
-    camZoomCaps.current = v;
-    $("camZoomLabel").textContent = v.toFixed(1) + "x";
-  }catch(e){ /* costrizione zoom rifiutata: si ignora */ }
-}
-$("camZoomIn").addEventListener("click", () => {
-  if (camZoomCaps) applyZoom((camZoomCaps.current || camZoomCaps.min) + camZoomCaps.step * 4);
-});
-$("camZoomOut").addEventListener("click", () => {
-  if (camZoomCaps) applyZoom((camZoomCaps.current || camZoomCaps.min) - camZoomCaps.step * 4);
-});
-
-// Tocco sullo schermo = richiesta di rimettere a fuoco (utile se l'immagine live
-// e' sfocata: molti telefoni non rifocalizzano da soli su soggetti molto vicini).
-$("camStage").addEventListener("click", async (e) => {
-  if (e.target.closest("#camZoom")) return;  // non rubare il tocco ai pulsanti zoom
-  try{
-    const track = camStream && camStream.getVideoTracks()[0];
-    if (!track || !track.getCapabilities) return;
-    const caps = track.getCapabilities();
-    if (caps.focusMode && caps.focusMode.includes("single-shot")){
-      await track.applyConstraints({ advanced: [{ focusMode: "single-shot" }] });
-      $("camGuideHint").textContent = "Rimessa a fuoco\u2026";
-      setTimeout(() => { $("camGuideHint").textContent = "Inquadra il codice \u00B7 tocca per mettere a fuoco"; }, 1200);
-    }
-  }catch(e){ /* non supportato su questo browser/dispositivo */ }
-});
-
-function stopCamScan(){
-  camActive = false;
-  camScan.classList.remove("open");
-  if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
-  camVideo.srcObject = null;
-  camCapture = null;
-}
-$("camClose").addEventListener("click", stopCamScan);
-$("camPhoto").addEventListener("click", () => { stopCamScan(); $("scanFile").click(); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && camScan.classList.contains("open")) stopCamScan(); });
-
-// Ritaglia dal video (o da un frame ImageCapture a piena qualita') la zona
-// del riquadro guida e la pre-elabora per l'OCR
-async function grabGuideCanvas(){
-  let source = null, vw = 0, vh = 0, isBitmap = false;
-  if (camCapture){
-    try{
-      source = await camCapture.grabFrame();
-      vw = source.width; vh = source.height; isBitmap = true;
-    }catch(e){ source = null; }
-  }
-  if (!source){
-    vw = camVideo.videoWidth; vh = camVideo.videoHeight;
-    if (!vw || !vh) return null;
-    source = camVideo;
-  }
-  // Il riquadro guida e' centrato: ~78% larghezza, ~132px su altezza schermo.
-  // Rapportiamo alla risoluzione reale del video mantenendo una banda centrale.
-  const cropW = Math.round(vw * 0.82);
-  const cropH = Math.round(vh * 0.24);
-  const sx = Math.round((vw - cropW) / 2);
-  const sy = Math.round((vh - cropH) / 2);
-  const scale = Math.min(1, 1400 / cropW);
-  const cv = document.createElement("canvas");
-  cv.width = Math.round(cropW * scale);
-  cv.height = Math.round(cropH * scale);
-  const ctx = cv.getContext("2d");
-  ctx.drawImage(source, sx, sy, cropW, cropH, 0, 0, cv.width, cv.height);
-  const d = ctx.getImageData(0, 0, cv.width, cv.height);
-  const px = d.data;
-  for (let i = 0; i < px.length; i += 4){
-    let g = 0.299 * px[i] + 0.587 * px[i+1] + 0.114 * px[i+2];
-    g = (g - 128) * 1.7 + 128;
-    g = Math.max(0, Math.min(255, g));
-    px[i] = px[i+1] = px[i+2] = g;
-  }
-  ctx.putImageData(d, 0, 0);
-  if (isBitmap && source.close) source.close();
-  return cv;
-}
-
-async function camLoop(){
-  if (!camActive) return;
-  let m = null;
-  try{
-    const cv = await grabGuideCanvas();
-    if (cv){
-      const worker = await getWorker();
-      const {data} = await worker.recognize(cv);
-      m = matchCard(data.text || "");
-    }
-  }catch(e){ /* fotogramma sfocato o OCR fallito: si riprova */ }
-
-  if (m){
-    // Stabilita': accetto solo se lo stesso codice compare in 2 letture di fila.
-    if (m.canon === camLastCanon && !(m.type === "lor" && !m.setCode)){
-      camScan.classList.add("camLock");
-      $("camStatus").textContent = "\u2713 Carta riconosciuta: " + m.canon.replace(/^op:|^ygo:|^lego:/, "");
-      const found = m;
-      setTimeout(async () => { stopCamScan(); await applyCardMatch(found); }, 350);
-      return;
-    } else {
-      camLastCanon = m.canon;
-      $("camStatus").textContent = "Rilevato " + m.canon.replace(/^op:|^ygo:|^lor:|^lego:/, "") + "\u2026 tieni fermo";
-    }
-  } else {
-    camLastCanon = null;
-  }
-  setTimeout(camLoop, 120);   // piccola pausa tra un fotogramma e l'altro
-}
 
 // ============================================================
 // Filtri
