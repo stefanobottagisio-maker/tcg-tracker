@@ -219,6 +219,8 @@
     transition:transform .15s; flex:0 0 auto;
   }
   .ovsection.collapsed .ovchev{transform:rotate(-90deg);}
+  .ovflag{display:inline-flex; align-items:center; flex:0 0 auto;}
+  .ovflag .flag{width:18px; height:12px;}
   .ovsectionBody{overflow:hidden;}
   .ovsection.collapsed .ovsectionBody{display:none;}
   .ovsectionCount{margin-left:auto; color:var(--mute); font-size:12px; font-weight:500;}
@@ -282,7 +284,20 @@
     cursor:zoom-out;
   }
   #zoom.open{display:flex;}
-  #zoom img{max-height:86vh; max-width:94vw; border-radius:var(--radius-lg); box-shadow:0 12px 50px rgba(0,0,0,.6);}
+  #zoom img{max-height:86vh; max-width:94vw; border-radius:var(--radius-lg); box-shadow:0 12px 50px rgba(0,0,0,.6); touch-action:pan-y;}
+  #zoomPrev, #zoomNext{
+    position:fixed; top:50%; transform:translateY(-50%); z-index:2;
+    width:44px; height:44px; border-radius:999px; border:1px solid var(--line);
+    background:rgba(18,20,24,.75); color:var(--parchment); font-size:22px; line-height:1;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  #zoomPrev:hover, #zoomNext:hover{border-color:var(--gold); background:var(--panel2);}
+  #zoomPrev{left:14px;}
+  #zoomNext{right:14px;}
+  @media (max-width:640px){
+    #zoomPrev, #zoomNext{width:40px; height:40px; font-size:20px;}
+    #zoomPrev{left:6px;} #zoomNext{right:6px;}
+  }
   #zoom figcaption{
     position:fixed; bottom:14px; left:0; right:0; text-align:center;
     font-size:14px; color:var(--parchment); letter-spacing:.5px;
@@ -297,13 +312,35 @@
   #zoomPrice{display:block; margin-top:8px; color:var(--gold); font-size:13px;}
 
   #status{color:var(--mute); font-size:13px; padding:8px 0;}
-  #status.busy{color:var(--parchment);}
-  #status.busy::after{
-    content:""; display:inline-block; width:8px; height:8px; margin-left:8px;
-    border-radius:50%; background:var(--gold); vertical-align:middle;
-    animation:statusPulse 1s ease-in-out infinite;
+
+  /* Overlay di scansione: sempre visibile, indipendente dallo scroll della pagina */
+  #scanOverlay{
+    position:fixed; inset:0; z-index:80; display:none;
+    background:rgba(6,12,22,.82); align-items:center; justify-content:center; padding:20px;
   }
-  @keyframes statusPulse{ 0%,100%{opacity:.25;} 50%{opacity:1;} }
+  #scanOverlay.open{display:flex;}
+  #scanBox{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-lg);
+    padding:28px 26px; max-width:340px; width:100%; text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  #scanSpinner{
+    width:40px; height:40px; margin:0 auto 16px; border-radius:50%;
+    border:4px solid var(--line); border-top-color:var(--gold);
+    animation:scanSpin .8s linear infinite;
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-size:20px; font-weight:700;
+  }
+  #scanOverlay.result #scanSpinner{border:none; animation:none;}
+  #scanOverlay.result.ok #scanSpinner{background:var(--gold);}
+  #scanOverlay.result.fail #scanSpinner{background:var(--wax);}
+  @keyframes scanSpin{ to{transform:rotate(360deg);} }
+  #scanText{color:var(--parchment); font-size:14px; line-height:1.5;}
+  #scanClose{
+    margin-top:16px; background:var(--gold); color:#fff; border:none; border-radius:999px;
+    padding:9px 20px; font:inherit; font-weight:600; cursor:pointer;
+  }
+  #scanClose:hover{filter:brightness(1.08);}
 
   /* Area utente e login */
   #authArea{display:flex; align-items:center; gap:8px; margin-left:auto;}
@@ -441,7 +478,17 @@
   <p id="status"></p>
 </main>
 
+<div id="scanOverlay" role="status" aria-live="polite">
+  <div id="scanBox">
+    <div id="scanSpinner"></div>
+    <p id="scanText">Analisi in corso\u2026</p>
+    <button id="scanClose" type="button" hidden>Chiudi</button>
+  </div>
+</div>
+
 <div id="zoom" role="dialog" aria-modal="true">
+  <button id="zoomPrev" type="button" aria-label="Carta precedente">&#8249;</button>
+  <button id="zoomNext" type="button" aria-label="Carta successiva">&#8250;</button>
   <figure>
     <img id="zoomImg" src="" alt="">
     <figcaption>
@@ -844,7 +891,8 @@ function makeTile(opt){
   cap.appendChild(lbl); cap.appendChild(step);
 
   fig.appendChild(img); fig.appendChild(cap);
-  fig.addEventListener("click", () => openZoom(opt.big || img.src, opt.label, opt.links, opt.price));
+  fig._zoomOpt = opt; fig._imgEl = img;  // servono per scorrere alla carta successiva/precedente nello zoom
+  fig.addEventListener("click", () => zoomFig(fig));
   return fig;
 }
 
@@ -1465,6 +1513,35 @@ function timeoutAfter(ms){
   return new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms));
 }
 
+// ---------- Overlay di scansione: sempre visibile, non dipende dallo scroll ----------
+const scanOverlay = $("scanOverlay"), scanSpinner = $("scanSpinner"),
+      scanText = $("scanText"), scanCloseBtn = $("scanClose");
+function scanOverlayShow(text){
+  scanOverlay.classList.remove("result", "ok", "fail");
+  scanSpinner.textContent = "";
+  scanText.textContent = text;
+  scanCloseBtn.hidden = true;
+  scanOverlay.classList.add("open");
+}
+function scanOverlayUpdate(text){ scanText.textContent = text; }
+function scanOverlayHide(){ scanOverlay.classList.remove("open", "result", "ok", "fail"); }
+function scanOverlaySuccess(text){
+  scanOverlay.classList.add("result", "ok");
+  scanOverlay.classList.remove("fail");
+  scanSpinner.textContent = "\u2713";
+  scanText.textContent = text;
+  scanCloseBtn.hidden = true;
+  setTimeout(() => { if (scanOverlay.classList.contains("ok")) scanOverlayHide(); }, 1400);
+}
+function scanOverlayFail(text){
+  scanOverlay.classList.add("result", "fail");
+  scanOverlay.classList.remove("ok");
+  scanSpinner.textContent = "\u2715";
+  scanText.textContent = text;
+  scanCloseBtn.hidden = false;  // l'utente deve chiuderlo lui: l'avviso non deve passare inosservato
+}
+scanCloseBtn.addEventListener("click", scanOverlayHide);
+
 $("btnScan").addEventListener("click", () => $("scanFile").click());
 $("btnScanGlobal").addEventListener("click", () => $("scanFile").click());
 $("scanFile").addEventListener("change", async () => {
@@ -1472,9 +1549,14 @@ $("scanFile").addEventListener("change", async () => {
   $("scanFile").value = "";
   if (!f) return;
   const myGen = ++scanGen;
-  const setStatus = (txt) => { if (myGen === scanGen) statusEl.textContent = txt; };
+  const setStatus = (txt) => {
+    if (myGen !== scanGen) return;
+    statusEl.textContent = txt;
+    scanOverlayUpdate(txt);
+  };
+  scanOverlayShow("Foto ricevuta \u2014 analisi in corso, pu\u00F2 richiedere qualche secondo\u2026");
   statusEl.classList.add("busy");
-  setStatus("Foto ricevuta \u2014 analisi in corso, pu\u00F2 richiedere qualche secondo\u2026");
+  statusEl.textContent = "Foto ricevuta \u2014 analisi in corso, pu\u00F2 richiedere qualche secondo\u2026";
 
   const RECOGNIZE_TIMEOUT_MS = 25000;
   let bitmap = null, url = null, timedOut = false;
@@ -1521,17 +1603,20 @@ $("scanFile").addEventListener("change", async () => {
     if (myGen !== scanGen) return;  // l'utente ha gia' avviato un'altra scansione: ignoro questo risultato
     if (m){
       await applyCardMatch(m);
+      const msg = statusEl.textContent;
+      if (msg.startsWith("\u2713")) scanOverlaySuccess(msg); else scanOverlayFail(msg);
     } else {
-      setStatus("Nessuna corrispondenza trovata dopo l'analisi. Fotografa l'intera carta, ben illuminata e a fuoco: " +
-        "funziona per One Piece, Yu-Gi-Oh! e Lorcana (non per LEGO, che si cerca dall'apposito campo di ricerca).");
+      const msg = "Nessuna corrispondenza trovata dopo l'analisi. Fotografa l'intera carta, ben illuminata e a fuoco: " +
+        "funziona per One Piece, Yu-Gi-Oh! e Lorcana (non per LEGO, che si cerca dall'apposito campo di ricerca).";
+      setStatus(msg);
+      scanOverlayFail(msg);
     }
   }catch(e){
     timedOut = (e && e.message === "timeout");
-    if (myGen === scanGen){
-      statusEl.textContent = timedOut
-        ? "Analisi troppo lenta, interrotta dopo " + Math.round(RECOGNIZE_TIMEOUT_MS/1000) + " secondi. Riprova con una foto piu\u2019 nitida o con meno luce riflessa."
-        : "Scansione non riuscita: " + (e.message || e) + ". Serve connessione per il motore OCR.";
-    }
+    const msg = timedOut
+      ? "Analisi troppo lenta, interrotta dopo " + Math.round(RECOGNIZE_TIMEOUT_MS/1000) + " secondi. Riprova con una foto piu\u2019 nitida o con meno luce riflessa."
+      : "Scansione non riuscita: " + (e.message || e) + ". Serve connessione per il motore OCR.";
+    if (myGen === scanGen){ statusEl.textContent = msg; scanOverlayFail(msg); }
   }finally{
     if (bitmap && bitmap.close) bitmap.close();
     if (url) URL.revokeObjectURL(url);
@@ -1676,13 +1761,14 @@ function ovRow(rows, label, prefix, tot, onClick, langFilter){
 // Crea una sezione collassabile: intestazione cliccabile (con chevron) +
 // corpo che contiene le righe. Le chiamate a ovRow vanno fatte sul CONTENITORE
 // restituito (non piu' su "rows" direttamente), cosi' restano dentro la sezione.
-function ovSection(rows, text){
+function ovSection(rows, text, flagLang){
   const wrap = document.createElement("div");
   wrap.className = "ovsection";
   const head = document.createElement("button");
   head.type = "button";
   head.className = "ovgame";
-  head.innerHTML = '<span class="ovchev">\u25BE</span><span>' + text + '</span>';
+  const flag = flagLang ? '<span class="ovflag">' + FLAG_SVG[flagLang] + '</span>' : '';
+  head.innerHTML = '<span class="ovchev">\u25BE</span><span>' + text + '</span>' + flag;
   const body = document.createElement("div");
   body.className = "ovsectionBody";
   head.addEventListener("click", () => wrap.classList.toggle("collapsed"));
@@ -1753,11 +1839,11 @@ function renderOverview(){
   for (const id in COLL) grandCopies += COLL[id];
 
   // --- One Piece: sezione EN sempre, JP solo se ha carte ---
-  const opEnabled = [["en", "Inglese \ud83c\uddec\ud83c\udde7"], ["jp", "Giapponese \ud83c\uddef\ud83c\uddf5"]];
+  const opEnabled = [["en", "Inglese"], ["jp", "Giapponese"]];
   opEnabled.forEach(([lf, lbl]) => {
     const anyOp = OP_SETS.some(s => hasLangCards(s.c + "-", lf));
     if (lf === "jp" && !anyOp) return;             // niente sezione JP vuota
-    const body = ovSection(rows, "One Piece \u2013 " + lbl);
+    const body = ovSection(rows, "One Piece \u2013 " + lbl, lf);
     OP_SETS.forEach((s, i) => {
       grandOwned += ovRow(body, s.c, s.c + "-", TOTALS[s.c],
         () => { lang = lf; localStorage.setItem("tcg_lang", lf); showOp(i); }, lf);
@@ -1774,7 +1860,7 @@ function renderOverview(){
       codes.add(id.split(":")[1]);
     }
     if (codes.size === 0) return;
-    const body = ovSection(rows, "Yu-Gi-Oh! \u2013 " + (lf === "jp" ? "Giapponese \ud83c\uddef\ud83c\uddf5" : "Inglese \ud83c\uddec\ud83c\udde7"));
+    const body = ovSection(rows, "Yu-Gi-Oh! \u2013 " + (lf === "jp" ? "Giapponese" : "Inglese"), lf);
     [...codes].sort().forEach(code => {
       const label = TOTALS["ygoname:" + code] || code;
       grandOwned += ovRow(body, label, "ygo:" + code + ":", TOTALS["ygo:" + code],
@@ -2231,7 +2317,10 @@ importFile.addEventListener("change", () => {
 // ============================================================
 const zoom = $("zoom"), zoomImg = $("zoomImg"), zoomCap = $("zoomCap"),
       zoomLinks = $("zoomLinks"), zoomPrice = $("zoomPrice");
-function openZoom(src, label, links, price){
+let currentZoomFig = null;
+
+function openZoom(src, label, links, price, fig){
+  currentZoomFig = fig || null;
   zoomImg.src = src; zoomImg.alt = label; zoomCap.textContent = label;
   zoomPrice.textContent = price || "";
   zoomLinks.innerHTML = (links || []).map(l =>
@@ -2239,9 +2328,45 @@ function openZoom(src, label, links, price){
   ).join("");
   zoom.classList.add("open");
 }
+// Apre lo zoom su una tessera (usato dal tap iniziale e dalla navigazione tra carte)
+function zoomFig(fig){
+  const opt = fig._zoomOpt;
+  if (!opt) return;
+  openZoom(opt.big || (fig._imgEl && fig._imgEl.src), opt.label, opt.links, opt.price, fig);
+}
+// Scorre alla carta successiva (dir=1) o precedente (dir=-1) nella stessa
+// griglia, con ritorno all'inizio/fine per una sfogliata continua.
+function zoomNav(dir){
+  if (!currentZoomFig || !currentZoomFig.parentElement) return;
+  const siblings = [...currentZoomFig.parentElement.children].filter(el => el.classList.contains("card"));
+  const i = siblings.indexOf(currentZoomFig);
+  if (i < 0) return;
+  const next = siblings[(i + dir + siblings.length) % siblings.length];
+  zoomFig(next);
+}
+$("zoomPrev").addEventListener("click", (e) => { e.stopPropagation(); zoomNav(-1); });
+$("zoomNext").addEventListener("click", (e) => { e.stopPropagation(); zoomNav(1); });
 zoomLinks.addEventListener("click", (e) => e.stopPropagation());
-zoom.addEventListener("click", () => zoom.classList.remove("open"));
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") zoom.classList.remove("open"); });
+zoom.addEventListener("click", (e) => {
+  if (e.target.closest("#zoomPrev, #zoomNext")) return;
+  zoom.classList.remove("open");
+});
+document.addEventListener("keydown", (e) => {
+  if (!zoom.classList.contains("open")) return;
+  if (e.key === "Escape") zoom.classList.remove("open");
+  if (e.key === "ArrowLeft") zoomNav(-1);
+  if (e.key === "ArrowRight") zoomNav(1);
+});
+// Swipe touch (mobile): scorrimento orizzontale per andare avanti/indietro.
+let zoomTouchX = null;
+zoom.addEventListener("touchstart", (e) => { zoomTouchX = e.changedTouches[0].clientX; }, {passive:true});
+zoom.addEventListener("touchend", (e) => {
+  if (zoomTouchX === null) return;
+  const dx = e.changedTouches[0].clientX - zoomTouchX;
+  zoomTouchX = null;
+  if (Math.abs(dx) < 40) return;   // scorrimento troppo corto: ignora (probabile tap)
+  zoomNav(dx < 0 ? 1 : -1);
+}, {passive:true});
 
 // ============================================================
 // ROUTER (History API): ogni vista e' una "pagina" con URL e
