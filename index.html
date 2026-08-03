@@ -321,7 +321,7 @@
   #scanOverlay.open{display:flex;}
   #scanBox{
     background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-lg);
-    padding:28px 26px; max-width:340px; width:100%; text-align:center;
+    padding:28px 26px; max-width:400px; width:100%; text-align:center;
     box-shadow:0 20px 60px rgba(0,0,0,.5);
   }
   #scanSpinner{
@@ -335,7 +335,11 @@
   #scanOverlay.result.ok #scanSpinner{background:var(--gold);}
   #scanOverlay.result.fail #scanSpinner{background:var(--wax);}
   @keyframes scanSpin{ to{transform:rotate(360deg);} }
-  #scanText{color:var(--parchment); font-size:14px; line-height:1.5;}
+  #scanText{
+    color:var(--parchment); font-size:14px; line-height:1.5; text-align:left;
+    max-height:40vh; overflow-y:auto;
+  }
+  #scanOverlay:not(.result) #scanText{text-align:center;}
   #scanClose{
     margin-top:16px; background:var(--gold); color:#fff; border:none; border-radius:999px;
     padding:9px 20px; font:inherit; font-weight:600; cursor:pointer;
@@ -1588,7 +1592,7 @@ $("scanFile").addEventListener("change", async () => {
   statusEl.textContent = "Foto ricevuta \u2014 analisi in corso, pu\u00F2 richiedere qualche secondo\u2026";
 
   const RECOGNIZE_TIMEOUT_MS = 30000;
-  let bitmap = null, url = null, timedOut = false;
+  let bitmap = null, url = null, timedOut = false, lastRawTexts = [];
 
   async function runRecognition(){
     if (window.createImageBitmap){
@@ -1607,24 +1611,29 @@ $("scanFile").addEventListener("change", async () => {
     const worker = await getWorker();
 
     // Il codice e' quasi sempre stampato in una fascia stretta vicino al bordo
-    // della carta: provo prima alcuni ritagli mirati, che mantengono tutta la
-    // risoluzione nativa della foto su quella piccola zona (molto piu' efficace
-    // che leggere la carta intera, dove lo stesso codice - schiacciato insieme
-    // a tutta l'illustrazione - diventa troppo piccolo in pixel per l'OCR).
-    // Non c'e' piu' il rischio di falsi positivi LEGO che c'era in passato:
-    // lo scanner foto cerca solo pattern con lettere (One Piece/Yu-Gi-Oh!/Lorcana).
+    // della carta: provo diversi ritagli piccoli e mirati (non uno largo), cosi'
+    // l'ingrandimento su quella zona e' molto piu' forte e il testo resta
+    // leggibile anche se sulla carta intera sarebbe minuscolo. Provo due fasce
+    // verticali (vicino al bordo e un po' piu' in alto) per coprire layout
+    // diversi. Non c'e' rischio di falsi positivi LEGO: lo scanner foto cerca
+    // solo pattern con lettere (One Piece/Yu-Gi-Oh!/Lorcana).
     const regions = [
-      {fx:0.00, fy:0.80, fw:0.55, fh:0.18},  // basso-sinistra
-      {fx:0.45, fy:0.80, fw:0.55, fh:0.18},  // basso-destra
-      {fx:0.00, fy:0.82, fw:1.00, fh:0.16},  // striscia intera in basso
+      {fx:0.00, fy:0.90, fw:0.38, fh:0.09},  // basso-sinistra, vicino al bordo
+      {fx:0.31, fy:0.90, fw:0.38, fh:0.09},  // basso-centro, vicino al bordo
+      {fx:0.62, fy:0.90, fw:0.38, fh:0.09},  // basso-destra, vicino al bordo
+      {fx:0.00, fy:0.80, fw:0.38, fh:0.09},  // basso-sinistra, piu' in alto
+      {fx:0.62, fy:0.80, fw:0.38, fh:0.09},  // basso-destra, piu' in alto
     ];
     let m = null;
+    const rawTexts = [];  // conservo cosa legge l'OCR, anche se non trova nulla: serve a capire perche'
     for (let i = 0; i < regions.length; i++){
       setStatus("Leggo il codice sulla carta (tentativo " + (i + 1) + " di " + (regions.length + 1) + ")\u2026");
       await worker.setParameters({ tessedit_pageseg_mode: "7" });  // riga singola
-      const cv = preprocessRegion(drawable, srcW, srcH, regions[i].fx, regions[i].fy, regions[i].fw, regions[i].fh, 1100);
+      const cv = preprocessRegion(drawable, srcW, srcH, regions[i].fx, regions[i].fy, regions[i].fw, regions[i].fh, 1300);
       const {data} = await worker.recognize(cv);
-      m = matchConfident((data.text || "").toUpperCase());
+      const t = (data.text || "").toUpperCase();
+      if (t.trim()) rawTexts.push(t.trim().replace(/\s+/g, " "));
+      m = matchConfident(t);
       if (m) break;
     }
 
@@ -1635,8 +1644,11 @@ $("scanFile").addEventListener("change", async () => {
       setStatus("Analizzo l'intera foto (tentativo " + (regions.length + 1) + " di " + (regions.length + 1) + ")\u2026");
       await worker.setParameters({ tessedit_pageseg_mode: "11" });
       const {data} = await worker.recognize(wholeCv);
-      m = matchConfident((data.text || "").toUpperCase());
+      const t = (data.text || "").toUpperCase();
+      if (t.trim()) rawTexts.push(t.trim().replace(/\s+/g, " "));
+      m = matchConfident(t);
     }
+    lastRawTexts = rawTexts;  // letto dal chiamante per il messaggio diagnostico in caso di fallimento
 
     // One Piece ha lo stesso codice in inglese e in giapponese, quindi la
     // lingua non si legge dal codice: cerco caratteri kana/kanji altrove
@@ -1659,7 +1671,9 @@ $("scanFile").addEventListener("change", async () => {
       const msg = statusEl.textContent;
       if (msg.startsWith("\u2713")) scanOverlaySuccess(msg); else scanOverlayFail(msg);
     } else {
-      const msg = "Nessuna corrispondenza trovata dopo l'analisi. Fotografa l'intera carta, ben illuminata e a fuoco: " +
+      const sample = lastRawTexts.filter(t => t.length > 1).slice(0, 3).join(" \u00B7 ");
+      const seen = sample ? (" Testo letto: \u201C" + sample.slice(0, 140) + "\u201D.") : " Non ho letto alcun testo utile.";
+      const msg = "Nessuna corrispondenza trovata dopo l'analisi." + seen + " Fotografa l'intera carta, ben illuminata e a fuoco: " +
         "funziona per One Piece, Yu-Gi-Oh! e Lorcana (non per LEGO, che si cerca dall'apposito campo di ricerca).";
       setStatus(msg);
       scanOverlayFail(msg);
