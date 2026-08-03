@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Collezionista Matto · One Piece / Yu-Gi-Oh! / Lorcana / Magic / LEGO</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=IBM+Plex+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
@@ -37,14 +37,16 @@
     padding:14px 18px 10px;
     display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center;
   }
+  #logoMark{flex:0 0 auto; display:flex;}
+  #logoMark svg{width:34px; height:34px; display:block;}
   h1{
-    font-family:"IBM Plex Sans",system-ui,sans-serif; font-weight:800; letter-spacing:-.02em;
-    font-size:clamp(19px,4.2vw,32px); color:var(--gold);
+    font-family:"Fredoka","IBM Plex Sans",system-ui,sans-serif; font-weight:700;
+    font-size:clamp(20px,4.2vw,33px); color:var(--gold);
     cursor:pointer; white-space:nowrap;
   }
   h1:hover{text-shadow:0 0 14px rgba(199,70,52,.4);}
   .hbtn{
-    margin-left:auto; background:var(--panel); color:var(--parchment); border:1px solid var(--line);
+    background:var(--panel); color:var(--parchment); border:1px solid var(--line);
     border-radius:999px; padding:8px 16px; font:inherit; font-size:13px; cursor:pointer; transition:border-color .15s, background .15s;
   }
   .hbtn:hover{border-color:var(--gold); background:var(--panel2);}
@@ -118,6 +120,7 @@
     background:var(--gold); color:#fff; font-size:10px; font-weight:600;
     padding:3px 9px; border-radius:999px;
   }
+  .settileSpacer{display:block; height:14px;}
   .settile:hover{transform:translateY(-3px); border-color:var(--gold); box-shadow:0 10px 24px rgba(0,0,0,.3);}
   .settile img{
     display:block; width:100%; aspect-ratio:600/700; object-fit:cover; object-position:center 12%;
@@ -312,7 +315,7 @@
   #status{color:var(--mute); font-size:13px; padding:8px 0;}
 
   /* Area utente e login */
-  #authArea{display:flex; align-items:center; gap:8px;}
+  #authArea{display:flex; align-items:center; gap:8px; margin-left:auto;}
   #userMail{font-size:12px; color:var(--mute); max-width:180px;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   #authModal{
@@ -339,10 +342,6 @@
   #authMsg{font-size:12px; color:var(--mute); min-height:16px;}
   #syncDot{font-size:11px; color:var(--mute);}
 
-  footer{
-    border-top:1px solid var(--line); color:var(--mute);
-    font-size:12px; padding:14px 18px 26px; line-height:1.6; max-width:1400px; margin:0 auto;
-  }
   @media (prefers-reduced-motion: reduce){ .card{transition:none;} }
   @media (max-width:520px){ #grid{grid-template-columns:repeat(auto-fill,minmax(108px,1fr));} }
 </style>
@@ -352,13 +351,21 @@
 <div id="errBar" role="alert" hidden><span id="errText"></span><button id="errClose" type="button">chiudi</button></div>
 
 <header>
+  <span id="logoMark">
+    <svg viewBox="0 0 40 40" aria-hidden="true">
+      <rect x="6" y="10" width="22" height="26" rx="4" transform="rotate(-10 17 23)" fill="var(--panel2)" stroke="var(--line)" stroke-width="1.5"/>
+      <rect x="10" y="7" width="22" height="26" rx="4" transform="rotate(6 21 20)" fill="var(--sea)" stroke="var(--line)" stroke-width="1.5"/>
+      <rect x="12" y="9" width="18" height="22" rx="3.5" fill="var(--gold)"/>
+      <circle cx="21" cy="20" r="4.5" fill="#fff" opacity=".92"/>
+    </svg>
+  </span>
   <h1 id="homeLink" title="Torna alla scelta del gioco">Collezionista Matto</h1>
-  <button class="hbtn hbtn-accent" id="btnScanGlobal" type="button">&#128247; Scansiona</button>
   <button class="hbtn" id="btnOverview">&#128194; La mia collezione</button>
+  <button class="hbtn hbtn-accent" id="btnScanGlobal" type="button">&#128247; Scansiona</button>
   <span id="authArea">
     <span id="userMail" hidden></span>
     <span id="syncDot" hidden></span>
-    <button class="hbtn" id="btnAuth" style="margin-left:0">Accedi</button>
+    <button class="hbtn" id="btnAuth">Accedi</button>
   </span>
 </header>
 
@@ -439,29 +446,20 @@
     <h2>Statistiche</h2>
     <div id="statsBody"></div>
   </section>
-  </section>
 
   <p id="status"></p>
 </main>
 
-<footer>
-  Fonti dati e immagini: One Piece via CDN Limitless TCG (fallback siti Bandai); Yu-Gi-Oh! via API YGOPRODeck
-  (che include il prezzo Cardmarket in euro); Lorcana via API Lorcast. Serve connessione internet per caricare
-  immagini e set non ancora visitati; gli elenchi carte di Yu-Gi-Oh! e Lorcana vengono salvati in locale dopo la
-  prima visita. La collezione &egrave; salvata nella memoria del browser: usa &ldquo;Esporta backup&rdquo;
-  regolarmente. Per Yu-Gi-Oh! il conteggio &egrave; per ristampa nel set visitato (stessa carta in due set = due voci).
-  Scanner: il pulsante &ldquo;Scansiona&rdquo; in alto (raggiungibile da qualunque schermata, non solo
-  dentro un set) apre la fotocamera dal vivo &ndash; inquadra il codice stampato nel riquadro e la carta viene
-  riconosciuta e aggiunta da sola (One Piece: angolo in basso a sinistra, es. OP05-119; Yu-Gi-Oh!: codice sotto
-  l'illustrazione, es. MRD-EN060; Lorcana: riga in basso, es. 12/204 EN 3; LEGO: numero di set sulla scatola o
-  sul libretto istruzioni, es. 75192, verificato contro il catalogo prima di essere accettato). Se l'immagine
-  risulta sfocata, tocca lo schermo per rimettere a fuoco (dove il telefono lo supporta). In alternativa
-  &ldquo;Usa una foto&rdquo; apre una sessione fotocamera temporanea e prova diversi ritagli mirati sulle fasce
-  dove i produttori stampano il codice, prima di tentare sull'intera foto. Il motore OCR viene scaricato al
-  primo utilizzo; la fotocamera dal vivo richiede una connessione HTTPS (come GitHub Pages). I conteggi delle
-  espansioni One Piece sono verificati automaticamente (vedi GUIDA-INSTALLAZIONE.md), cosi&igrave; restano
-  corretti anche per un set mai aperto.
-</footer>
+<div id="zoom" role="dialog" aria-modal="true">
+  <figure>
+    <img id="zoomImg" src="" alt="">
+    <figcaption>
+      <span id="zoomCap"></span>
+      <span id="zoomPrice"></span>
+      <span id="zoomLinks"></span>
+    </figcaption>
+  </figure>
+</div>
 
 <div id="camScan" role="dialog" aria-modal="true" aria-label="Scanner fotocamera">
   <div id="camStage">
@@ -475,17 +473,6 @@
       <button id="camClose" type="button">Chiudi</button>
     </div>
   </div>
-</div>
-
-<div id="zoom" role="dialog" aria-modal="true">
-  <figure>
-    <img id="zoomImg" src="" alt="">
-    <figcaption>
-      <span id="zoomCap"></span>
-      <span id="zoomPrice"></span>
-      <span id="zoomLinks"></span>
-    </figcaption>
-  </figure>
 </div>
 
 <script>
@@ -1097,7 +1084,7 @@ function setTile(code, name, sources, prefix, tot, onClick, badge){
     (badge ? '<span class="settileBadge">' + badge + '</span>' : '') +
     '<div class="scode">' + code + '</div>' +
     '<div class="sname" title="' + name + '">' + name + '</div>' +
-    (badge ? '<span class="sprog" style="display:block;padding-bottom:8px;">' + badge + '</span>'
+    (badge ? '<span class="settileSpacer"></span>'
            : '<div class="sbar"><i style="width:' + pct + '%"></i></div>' +
              '<span class="sprog">' + own + ' / ' + (tot || "?") + '</span>');
   chainImg(el.querySelector("img"), sources);
